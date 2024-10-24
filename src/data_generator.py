@@ -81,22 +81,33 @@ class DataGenerator:
                 window_end = row_counter
                 window_middle = int((window_begin + window_end) / 2)
 
-                min_ = np.inf
-                min_index = -1
-                max_ = -np.inf
-                max_index = -1
-                for i in range(window_begin, window_end + 1):
-                    price = df.iloc[i][col_name]
-                    if price < min_:
-                        min_ = price
-                        min_index = i
-                    if price > max_:
-                        max_ = price
-                        max_index = i
+                # min_ = np.inf
+                # min_index = -1
+                # max_ = -np.inf
+                # max_index = -1
+                # for i in range(window_begin, window_end + 1):
+                #     price = df.iloc[i][col_name]
+                #     if price < min_:
+                #         min_ = price
+                #         min_index = i
+                #     if price > max_:
+                #         max_ = price
+                #         max_index = i
 
-                if max_index == window_middle:
+                high_window = df.loc[window_begin : window_end]['high']
+                low_window = df.loc[window_begin : window_end]['low']
+
+                max_index = high_window.idxmax()
+                min_index = low_window.idxmin()
+                max_ = high_window.max()
+                min_ = low_window.min()
+
+                min_after = df.loc[max_index : max_index+12]['low'].min()
+                max_after = df.loc[max_index : max_index+12]['high'].max()
+
+                if max_index == window_middle and max_ - min_after > 5:
                     labels[window_middle] = 0
-                elif min_index == window_middle:
+                elif min_index == window_middle and max_after - min_ > 5:
                     labels[window_middle] = 1
                 else:
                     labels[window_middle] = 2
