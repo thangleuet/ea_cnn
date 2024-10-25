@@ -22,3 +22,4 @@ src/scratch_pad.py
 env
 data
 test
+best_model_keras

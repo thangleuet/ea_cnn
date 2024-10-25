@@ -19,7 +19,7 @@ df['labels'] = df['labels'].astype(np.int8)
 if 'dividend_amount' in df.columns:
     df.drop(columns=['dividend_amount', 'split_coefficient'], inplace=True)
 
-from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
+from sklearn.preprocessing import MinMaxScaler, OneHotEncoder, StandardScaler
 
 list_features = list(df.loc[:, 'open':'eom_26'].columns)
 print('Total number of features', len(list_features))
@@ -51,7 +51,7 @@ print("Shape of x, y train/cv/test {} {} {} {} {} {}".format(x_train.shape, y_tr
 
 num_features = 225  # should be a perfect square
 selection_method = 'all'
-topk = 320 if selection_method == 'all' else num_features
+topk = 300 if selection_method == 'all' else num_features
 
 from operator import itemgetter
 from sklearn.feature_selection import SelectKBest, f_classif, mutual_info_classif
@@ -86,7 +86,7 @@ if selection_method == 'all':
     feat_idx = []
     for c in common:
         feat_idx.append(list_features.index(c))
-    feat_idx = sorted(feat_idx[0:225])
+    feat_idx = sorted(feat_idx[0:num_features])
 
 
 if selection_method == 'all':
@@ -228,19 +228,19 @@ x_test = np.stack((x_test,) * 3, axis=-1)
 x_cv = np.stack((x_cv,) * 3, axis=-1)
 print("final shape of x, y train/test {} {} {} {}".format(x_train.shape, y_train.shape, x_test.shape, y_test.shape))
 
-from matplotlib import pyplot as plt
+# from matplotlib import pyplot as plt
 
-fig = plt.figure(figsize=(15, 15))
-columns = rows = 3
-for i in range(1, columns*rows +1):
-    index = np.random.randint(len(x_train))
-    img = x_train[index]
-    fig.add_subplot(rows, columns, i)
-    plt.axis("off")
-    plt.title('image_'+str(index)+'_class_'+str(np.argmax(y_train[index])), fontsize=10)
-    plt.subplots_adjust(wspace=0.2, hspace=0.2)
-    plt.imshow(img)
-plt.show()
+# fig = plt.figure(figsize=(15, 15))
+# columns = rows = 3
+# for i in range(1, columns*rows +1):
+#     index = np.random.randint(len(x_train))
+#     img = x_train[index]
+#     fig.add_subplot(rows, columns, i)
+#     plt.axis("off")
+#     plt.title('image_'+str(index)+'_class_'+str(np.argmax(y_train[index])), fontsize=10)
+#     plt.subplots_adjust(wspace=0.2, hspace=0.2)
+#     plt.imshow(img)
+# plt.show()
 
 from tensorflow.keras.models import Sequential, load_model, Model
 from tensorflow.keras.layers import Dense, Dropout
@@ -248,7 +248,6 @@ from tensorflow.keras.layers import Conv2D, MaxPool2D, Flatten, LeakyReLU
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, CSVLogger, Callback
 from tensorflow.keras import optimizers
 from tensorflow.keras.regularizers import l2, l1, l1_l2
-from tensorflow.keras.initializers import RandomUniform, RandomNormal
 from tensorflow.keras.models import load_model
 from tensorflow.keras import regularizers
 
@@ -257,7 +256,7 @@ params = {'batch_size': 80, 'conv2d_layers': {'conv2d_do_1': 0.2, 'conv2d_filter
                                                'conv2d_filters_2': 64, 'conv2d_kernel_size_2': 3, 'conv2d_mp_2': 2, 'conv2d_strides_2': 1, 
                                                'kernel_regularizer_2': 0.0, 'layers': 'two'}, 
            'dense_layers': {'dense_do_1': 0.3, 'dense_nodes_1': 128, 'kernel_regularizer_1': 0.0, 'layers': 'one'},
-           'epochs': 300, 'lr': 0.001, 'optimizer': 'adam'}
+           'epochs': 200, 'lr': 0.001, 'optimizer': 'adam'}
 
 from functools import *
 from sklearn.metrics import f1_score
@@ -340,6 +339,7 @@ import os
 best_model_path = os.path.join('.', 'best_model_keras')
 # es = EarlyStopping(monitor='val_loss', mode='min', verbose=1,
                 #    patience=100, min_delta=0.0001)
+
 rlp = ReduceLROnPlateau(monitor='val_loss', factor=0.02, patience=20, verbose=1, mode='min',
                         min_delta=0.001, cooldown=1, min_lr=0.0001)
 mcp = ModelCheckpoint(best_model_path, monitor='val_f1_metric', verbose=1,
@@ -370,28 +370,40 @@ plt.show()
 
 from sklearn.metrics import confusion_matrix, roc_auc_score, cohen_kappa_score
 
+# Load model and evaluate
 model = load_model(best_model_path)
 test_res = model.evaluate(x_test, y_test, verbose=0)
-print("keras evaluate=", test_res)
+print("keras evaluate =", test_res)
+
+# Predict and filter by confidence > 0.9
 pred = model.predict(x_test)
-pred_classes = np.argmax(pred, axis=1)
-y_test_classes = np.argmax(y_test, axis=1)
+pred_probs = np.max(pred, axis=1)  # Max probability for each prediction
+confident_mask = pred_probs > 0.95  # Filter predictions with confidence > 0.9
+
+# Get predicted and true classes with confidence > 0.9
+pred_classes = np.argmax(pred, axis=1)[confident_mask]
+y_test_classes = np.argmax(y_test, axis=1)[confident_mask]
+
+print(f"Number of confident predictions: {len(pred_classes)}")
+
+# Baseline check and metrics
 check_baseline(pred_classes, y_test_classes)
 conf_mat = confusion_matrix(y_test_classes, pred_classes)
-labels = [0,1,2]
 print(conf_mat)
-f1_weighted = f1_score(y_test_classes, pred_classes, labels=None, 
-         average='weighted', sample_weight=None)
-print("F1 score (weighted)", f1_weighted)
-print("F1 score (macro)", f1_score(y_test_classes, pred_classes, labels=None, 
-         average='macro', sample_weight=None))
-print("F1 score (micro)", f1_score(y_test_classes, pred_classes, labels=None, 
-         average='micro', sample_weight=None))  # weighted and micro preferred in case of imbalance
 
-print("cohen's Kappa", cohen_kappa_score(y_test_classes, pred_classes))
+# F1 scores
+print("F1 score (weighted):", f1_score(y_test_classes, pred_classes, average='weighted'))
+print("F1 score (macro):", f1_score(y_test_classes, pred_classes, average='macro'))
+print("F1 score (micro):", f1_score(y_test_classes, pred_classes, average='micro'))
 
+# Cohen's Kappa
+print("Cohen's Kappa:", cohen_kappa_score(y_test_classes, pred_classes))
+
+# Recall per class
 recall = []
 for i, row in enumerate(conf_mat):
-    recall.append(np.round(row[i]/np.sum(row), 2))
-    print("Recall of class {} = {}".format(i, recall[i]))
-print("Recall avg", sum(recall)/len(recall))
+    recall_value = np.round(row[i] / np.sum(row), 2) if np.sum(row) > 0 else 0.0
+    recall.append(recall_value)
+    print(f"Recall of class {i} = {recall_value}")
+
+print("Recall avg =", sum(recall) / len(recall))
