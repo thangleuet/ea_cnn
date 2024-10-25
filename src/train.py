@@ -1,109 +1,27 @@
-# %%
-# uncomment below line of code if you want to calculate features and save dataframe
-# this script prints the path at which dataframe with calculated features is saved.
-# train.py calls the DataGenerator class to 
-
-# %run ./train.py WMT original
-
-# this notebook was trained on cloud compute. So use your own paths
 
 import pandas as pd 
 import numpy as np
-from tqdm import tqdm_notebook as tqdm
-from IPython.core.interactiveshell import InteractiveShell
-
-np.random.seed(2)
-# use the path printed in above output cell after running stock_cnn.py. It's in below format
-df = pd.read_csv("test/features_test.csv")
-df['labels'] = df['labels'].astype(np.int8)
-if 'dividend_amount' in df.columns:
-    df.drop(columns=['dividend_amount', 'split_coefficient'], inplace=True)
-
 from sklearn.preprocessing import MinMaxScaler, OneHotEncoder, StandardScaler
-
-list_features = list(df.loc[:, 'open':'eom_26'].columns)
-print('Total number of features', len(list_features))
-x_data = df.loc[:, 'open':'eom_26'].values
-y_data = df['labels'].values
- 
-x_train_all = x_data[: int(0.8*x_data.shape[0])]
-y_train_all = y_data[: int(0.8*x_data.shape[0])]
-x_test = x_data[int(0.8*x_data.shape[0]):]
-y_test = y_data[int(0.8*x_data.shape[0]):]
-
-if 0.7*x_train_all.shape[0] < 2500:
-    train_split = 0.8
-else:
-    train_split = 0.7
-
-x_train = x_train_all[: int(train_split*x_train_all.shape[0])]
-y_train = y_train_all[: int(train_split*y_train_all.shape[0])]
-x_cv = x_train_all[int(train_split*x_train_all.shape[0]):]
-y_cv = y_train_all[int(train_split*y_train_all.shape[0]):]
-
-mm_scaler = MinMaxScaler(feature_range=(0, 1)) # or StandardScaler?
-x_train = mm_scaler.fit_transform(x_train)
-x_cv = mm_scaler.transform(x_cv)
-x_test = mm_scaler.transform(x_test)
-
-x_main = x_train.copy()
-print("Shape of x, y train/cv/test {} {} {} {} {} {}".format(x_train.shape, y_train.shape, x_cv.shape, y_cv.shape, x_test.shape, y_test.shape))
-
-num_features = 225  # should be a perfect square
-selection_method = 'all'
-topk = 300 if selection_method == 'all' else num_features
 
 from operator import itemgetter
 from sklearn.feature_selection import SelectKBest, f_classif, mutual_info_classif
-
-if selection_method == 'anova' or selection_method == 'all':
-    select_k_best = SelectKBest(f_classif, k=topk)
-    if selection_method != 'all':
-        x_train = select_k_best.fit_transform(x_main, y_train)
-        x_cv = select_k_best.transform(x_cv)
-        x_test = select_k_best.transform(x_test)
-    else:
-        select_k_best.fit(x_main, y_train)
-    
-    selected_features_anova = itemgetter(*select_k_best.get_support(indices=True))(list_features)
-    print("****************************************")
-    
-if selection_method == 'mutual_info' or selection_method == 'all':
-    select_k_best = SelectKBest(mutual_info_classif, k=topk)
-    if selection_method != 'all':
-        x_train = select_k_best.fit_transform(x_main, y_train)
-        x_cv = select_k_best.transform(x_cv)
-        x_test = select_k_best.transform(x_test)
-    else:
-        select_k_best.fit(x_main, y_train)
-
-    selected_features_mic = itemgetter(*select_k_best.get_support(indices=True))(list_features)
-
-if selection_method == 'all':
-    common = list(set(selected_features_anova).intersection(selected_features_mic))
-    if len(common) < num_features:
-        raise Exception('number of common features found {} < {} required features. Increase "topk variable"'.format(len(common), num_features))
-    feat_idx = []
-    for c in common:
-        feat_idx.append(list_features.index(c))
-    feat_idx = sorted(feat_idx[0:num_features])
-
-
-if selection_method == 'all':
-    x_train = x_train[:, feat_idx]
-    x_cv = x_cv[:, feat_idx]
-    x_test = x_test[:, feat_idx]
-
-print("Shape of x, y train/cv/test {} {} {} {} {} {}".format(x_train.shape, 
-                                                             y_train.shape, x_cv.shape, y_cv.shape, x_test.shape, y_test.shape))
-
-_labels, _counts = np.unique(y_train, return_counts=True)
-print("percentage of class 0 = {}, class 1 = {}".format(_counts[0]/len(y_train) * 100, _counts[1]/len(y_train) * 100))
-
+from tensorflow.keras.models import Sequential, load_model, Model
+from tensorflow.keras.layers import Dense, Dropout
+from tensorflow.keras.layers import Conv2D, MaxPool2D, Flatten, LeakyReLU
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, CSVLogger, Callback
+from tensorflow.keras import optimizers
+from tensorflow.keras.models import load_model
+from tensorflow.keras import regularizers
 from sklearn.utils.class_weight import compute_class_weight
 import tensorflow as tf
 from tensorflow.keras import backend as K
 from tensorflow.keras.utils import get_custom_objects
+from functools import *
+from sklearn.metrics import f1_score
+from tensorflow.keras.metrics import AUC
+import os
+from sklearn.metrics import confusion_matrix, roc_auc_score, cohen_kappa_score
+from IPython.core.interactiveshell import InteractiveShell
 
 def get_sample_weights(y):
     """
@@ -204,13 +122,89 @@ def f1_metric(y_true, y_pred):
 
     return 2 * ((precision * recall) / (precision + recall + K.epsilon()))
 
+# use the path printed in above output cell after running stock_cnn.py. It's in below format
+df = pd.read_csv("test/features_test.csv")
+df['labels'] = df['labels'].astype(np.int8)
+
+list_features = list(df.loc[:, 'open':'eom_26'].columns)
+print('Total number of features', len(list_features))
+x_data = df.loc[:, 'open':'eom_26'].values
+y_data = df['labels'].values
+ 
+x_train_all = x_data[: int(0.8*x_data.shape[0])]
+y_train_all = y_data[: int(0.8*x_data.shape[0])]
+x_test = x_data[int(0.8*x_data.shape[0]):]
+y_test = y_data[int(0.8*x_data.shape[0]):]
+
+if 0.7*x_train_all.shape[0] < 2500:
+    train_split = 0.8
+else:
+    train_split = 0.7
+
+x_train = x_train_all[: int(train_split*x_train_all.shape[0])]
+y_train = y_train_all[: int(train_split*y_train_all.shape[0])]
+x_cv = x_train_all[int(train_split*x_train_all.shape[0]):]
+y_cv = y_train_all[int(train_split*y_train_all.shape[0]):]
+
+mm_scaler = MinMaxScaler(feature_range=(0, 1)) # or StandardScaler?
+x_train = mm_scaler.fit_transform(x_train)
+x_cv = mm_scaler.transform(x_cv)
+x_test = mm_scaler.transform(x_test)
+
+x_main = x_train.copy()
+print("Shape of x, y train/cv/test {} {} {} {} {} {}".format(x_train.shape, y_train.shape, x_cv.shape, y_cv.shape, x_test.shape, y_test.shape))
+
+num_features = 225  # should be a perfect square
+selection_method = 'all'
+topk = 300 if selection_method == 'all' else num_features
+
+if selection_method == 'anova' or selection_method == 'all':
+    select_k_best = SelectKBest(f_classif, k=topk)
+    if selection_method != 'all':
+        x_train = select_k_best.fit_transform(x_main, y_train)
+        x_cv = select_k_best.transform(x_cv)
+        x_test = select_k_best.transform(x_test)
+    else:
+        select_k_best.fit(x_main, y_train)
+    
+    selected_features_anova = itemgetter(*select_k_best.get_support(indices=True))(list_features)
+    print("****************************************")
+    
+if selection_method == 'mutual_info' or selection_method == 'all':
+    select_k_best = SelectKBest(mutual_info_classif, k=topk)
+    if selection_method != 'all':
+        x_train = select_k_best.fit_transform(x_main, y_train)
+        x_cv = select_k_best.transform(x_cv)
+        x_test = select_k_best.transform(x_test)
+    else:
+        select_k_best.fit(x_main, y_train)
+
+    selected_features_mic = itemgetter(*select_k_best.get_support(indices=True))(list_features)
+
+if selection_method == 'all':
+    common = list(set(selected_features_anova).intersection(selected_features_mic))
+    if len(common) < num_features:
+        raise Exception('number of common features found {} < {} required features. Increase "topk variable"'.format(len(common), num_features))
+    feat_idx = []
+    for c in common:
+        feat_idx.append(list_features.index(c))
+    feat_idx = sorted(feat_idx[0:num_features])
+
+
+if selection_method == 'all':
+    x_train = x_train[:, feat_idx]
+    x_cv = x_cv[:, feat_idx]
+    x_test = x_test[:, feat_idx]
+
+print("Shape of x, y train/cv/test {} {} {} {} {} {}".format(x_train.shape, 
+                                                             y_train.shape, x_cv.shape, y_cv.shape, x_test.shape, y_test.shape))
+
+_labels, _counts = np.unique(y_train, return_counts=True)
+print("percentage of class 0 = {}, class 1 = {}".format(_counts[0]/len(y_train) * 100, _counts[1]/len(y_train) * 100))
+
 get_custom_objects().update({"f1_metric": f1_metric, "f1_weighted": f1_weighted})
 
 sample_weights = get_sample_weights(y_train)
-print("Test sample_weights")
-rand_idx = np.random.randint(0, 1000, 30)
-print(y_train[rand_idx])
-print(sample_weights[rand_idx])
 
 one_hot_enc = OneHotEncoder(sparse=False, categories='auto')  # , categories='auto'
 y_train = one_hot_enc.fit_transform(y_train.reshape(-1, 1))
@@ -228,28 +222,6 @@ x_test = np.stack((x_test,) * 3, axis=-1)
 x_cv = np.stack((x_cv,) * 3, axis=-1)
 print("final shape of x, y train/test {} {} {} {}".format(x_train.shape, y_train.shape, x_test.shape, y_test.shape))
 
-# from matplotlib import pyplot as plt
-
-# fig = plt.figure(figsize=(15, 15))
-# columns = rows = 3
-# for i in range(1, columns*rows +1):
-#     index = np.random.randint(len(x_train))
-#     img = x_train[index]
-#     fig.add_subplot(rows, columns, i)
-#     plt.axis("off")
-#     plt.title('image_'+str(index)+'_class_'+str(np.argmax(y_train[index])), fontsize=10)
-#     plt.subplots_adjust(wspace=0.2, hspace=0.2)
-#     plt.imshow(img)
-# plt.show()
-
-from tensorflow.keras.models import Sequential, load_model, Model
-from tensorflow.keras.layers import Dense, Dropout
-from tensorflow.keras.layers import Conv2D, MaxPool2D, Flatten, LeakyReLU
-from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, CSVLogger, Callback
-from tensorflow.keras import optimizers
-from tensorflow.keras.regularizers import l2, l1, l1_l2
-from tensorflow.keras.models import load_model
-from tensorflow.keras import regularizers
 
 params = {'batch_size': 80, 'conv2d_layers': {'conv2d_do_1': 0.2, 'conv2d_filters_1': 64, 'conv2d_kernel_size_1': 3, 'conv2d_mp_1': 0, 
                                                'conv2d_strides_1': 1, 'kernel_regularizer_1': 0.0, 'conv2d_do_2': 0.3, 
@@ -258,9 +230,6 @@ params = {'batch_size': 80, 'conv2d_layers': {'conv2d_do_1': 0.2, 'conv2d_filter
            'dense_layers': {'dense_do_1': 0.3, 'dense_nodes_1': 128, 'kernel_regularizer_1': 0.0, 'layers': 'one'},
            'epochs': 200, 'lr': 0.001, 'optimizer': 'adam'}
 
-from functools import *
-from sklearn.metrics import f1_score
-from tensorflow.keras.metrics import AUC
 
 def f1_custom(y_true, y_pred):
     y_t = np.argmax(y_true, axis=1)
@@ -334,11 +303,7 @@ from tensorflow.keras.utils import plot_model
 model = create_model_cnn(params)
 plot_model(model, to_file='model.png', show_shapes=True, show_layer_names=False)
 
-import os
-
 best_model_path = os.path.join('.', 'best_model_keras')
-# es = EarlyStopping(monitor='val_loss', mode='min', verbose=1,
-                #    patience=100, min_delta=0.0001)
 
 rlp = ReduceLROnPlateau(monitor='val_loss', factor=0.02, patience=20, verbose=1, mode='min',
                         min_delta=0.001, cooldown=1, min_lr=0.0001)
@@ -368,7 +333,6 @@ plt.xlabel('Epoch')
 plt.legend(['train_loss', 'val_loss', 'f1', 'val_f1'], loc='upper left')
 plt.show()
 
-from sklearn.metrics import confusion_matrix, roc_auc_score, cohen_kappa_score
 
 # Load model and evaluate
 model = load_model(best_model_path)
