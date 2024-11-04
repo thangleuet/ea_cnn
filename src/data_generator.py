@@ -19,7 +19,7 @@ class DataGenerator:
         self.output_path = os.path.join(data_path, f"features_{data_path}.csv")
         self.BASE_URL = ""  # api key from alpha vantage service
         self.start_col = 'open'
-        self.end_col = 'eom_26'
+        self.end_col = 'eom_200'
         self.df = self.create_features()
         self.one_hot_enc = OneHotEncoder(sparse=False, categories='auto')
         self.one_hot_enc.fit(self.df['labels'].values.reshape(-1, 1))
@@ -27,34 +27,33 @@ class DataGenerator:
         self.test_duration_years = 1
 
     def calculate_technical_indicators(self, df, col_name, intervals):
-        # get_RSI(df, col_name, intervals)  # faster but non-smoothed RSI
         get_RSI_smooth(df, col_name, intervals)  # momentum
         get_williamR(df, col_name, intervals)  # momentum
         get_mfi(df, intervals)  # momentum
-        # get_MACD(df, col_name, intervals)  # momentum, ready to use +3
-        # get_PPO(df, col_name, intervals)  # momentum, ready to use +1
         get_ROC(df, col_name, intervals)  # momentum
-        get_CMF(df, col_name, intervals)  # momentum, volume EMA
+        get_CMF(df, col_name, intervals)  # momentum
         get_CMO(df, col_name, intervals)  # momentum
         get_SMA(df, col_name, intervals)
         get_SMA(df, 'open', intervals)
         get_EMA(df, col_name, intervals)
         get_WMA(df, col_name, intervals)
         get_HMA(df, col_name, intervals)
+        get_macd(df)
+        get_adx(df, col_name, intervals)  # trend
         get_TRIX(df, col_name, intervals)  # trend
         get_CCI(df, col_name, intervals)  # trend
         get_DPO(df, col_name, intervals)  # Trend oscillator
         get_kst(df, col_name, intervals)  # Trend
         get_DMI(df, col_name, intervals)  # trend
         get_BB_MAV(df, col_name, intervals)  # volatility
-        # get_PSI(df, col_name, intervals)  # can't find formula
         get_force_index(df, intervals)  # volume
-        get_kdjk_rsv(df, intervals)  # ready to use, +2*len(intervals), 2 rows
+        get_kdjk_rsv(df, intervals)
+        get_OBV(df)  # volume
         get_EOM(df, col_name, intervals)  # volume momentum
-        get_volume_delta(df)  # volume +1
-        get_IBR(df)  # ready to use +1
+        get_volume_delta(df)  # volume
+        get_IBR(df)
 
-    def create_labels_price(self, df, col_name, window_size=25):
+    def create_labels_price(self, df, col_name, window_size=12):
         """
         Data is labeled as per the logic in research paper
         Label code : BUY => 1, SELL => 0, HOLD => 2
@@ -89,28 +88,28 @@ class DataGenerator:
 
                 current_price = df.loc[window_begin, col_name]
 
-                if (max_ - current_price > 15) and (current_price - min_ > 15):
+                if (max_ - current_price > 7) and (current_price - min_ > 7):
                     if max_index < min_index:
                         min_low_small = df.loc[window_begin : max_index]['low'].min()
-                        if current_price - min_low_small < 5:
+                        if current_price - min_low_small < 3:
                             labels[window_begin] = 1
                         else:
                             labels[window_begin] = 2
                     else:
                         max_high_small = df.loc[window_begin : min_index]['high'].max()
-                        if max_high_small - current_price < 5:
+                        if max_high_small - current_price < 3:
                             labels[window_begin] = 0
                         else:
                             labels[window_begin] = 2
-                elif (max_ - current_price > 15) and (current_price - min_ <= 15):
+                elif (max_ - current_price > 7) and (current_price - min_ <= 7):
                     min_low_small = df.loc[window_begin : max_index]['low'].min()
-                    if current_price - min_low_small < 5:
+                    if current_price - min_low_small < 3:
                         labels[window_begin] = 1
                     else:
                         labels[window_begin] = 2
-                elif (max_ - current_price <= 15) and (current_price - min_ > 15):
+                elif (max_ - current_price <= 7) and (current_price - min_ > 7):
                     max_high_small = df.loc[window_begin : min_index]['high'].max()
-                    if max_high_small - current_price < 5:
+                    if max_high_small - current_price < 3:
                         labels[window_begin] = 0
                     else:
                         labels[window_begin] = 2
@@ -123,7 +122,7 @@ class DataGenerator:
         pbar.close()
         return labels
 
-    def create_labels(self, df, col_name, window_size=11):
+    def create_labels(self, df, col_name, window_size=19):
         """
         Data is labeled as per the logic in research paper
         Label code : BUY => 1, SELL => 0, HOLD => 2
@@ -160,12 +159,11 @@ class DataGenerator:
                 min_after = df.loc[max_index : window_end]['low'].min()
                 max_after = df.loc[min_index : window_end]['high'].max()
 
-                current_price_high = df.iloc[window_middle]['high']
-                current_price_low = df.iloc[window_middle]['low']
+                current_price = df.iloc[window_middle]['close']
 
-                if max_index == window_middle and max_ - min_after > 5:
+                if max_index == window_middle and current_price - min_after > 5:
                     labels[window_middle] = 0
-                elif min_index == window_middle and max_after - min_ > 5:
+                elif min_index == window_middle and max_after - current_price > 5:
                     labels[window_middle] = 1
                 else:
                     labels[window_middle] = 2
@@ -278,10 +276,20 @@ class DataGenerator:
                 durration_trend = 0
                 number_pullback = 0
 
+            # td, ha
+            td_seq_ha = ast.literal_eval(technical_data[i][0]).get('td_sequential_ha', None)
+            td_seq = ast.literal_eval(technical_data[i][0]).get('td_sequential', None)
+
+            if td_seq_ha == 0:
+                df.at[i, 'td_seq_ha_trend'] = 0
+                df.at[i, 'td_seq_ha_number'] = 0
+            else:
+                df.at[i, 'td_seq_ha_number'] = int(td_seq_ha[0])
+                df.at[i, 'td_seq_ha_trend'] = 0 if 'up' in td_seq_ha else 1
+
             df.at[i, 'trend_name'] = trend_name
             df.at[i, 'durration_trend'] = durration_trend
             df.at[i, 'number_pullback'] = number_pullback
-
         return df
                 
     def create_features(self):
@@ -298,7 +306,7 @@ class DataGenerator:
             technical_info = df_raw[['technical_info']]
             df = self.get_trend(df, technical_info)
 
-            intervals = range(6, 27)  # 21
+            intervals = [3, 6, 7, 9, 10, 13, 14, 17, 21, 25, 34, 50, 89, 100, 200]
             self.calculate_technical_indicators(df, 'close', intervals)
             
             df.to_csv(self.output_path, index=False)
@@ -319,6 +327,7 @@ class DataGenerator:
                 df['labels'] = self.create_label_short_long_ma_crossover(df, 'close', short, long)
             else:
                 df['labels'] = self.create_labels(df, 'close')
+                # df['labels'] = self.create_labels_price(df, 'close')
 
             prev_len = len(df)
             df.dropna(inplace=True)

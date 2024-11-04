@@ -1,0 +1,16 @@
+- RSI 14: >70 --> sell    <30 ---> buy
+- Williams %R 14: -80 -- -100: quá bán    -20 -- 0: quá mua
+- MFI:   >80: quá mua  <20: quá bán
+- ROC:  [(Giá đóng cửa phiên hiện tại – Giá đóng cửa n phiên trước) / Giá đóng cửa n phiên trước] x 100
+- CMF:  >80: quá mua     <20: quá bán
+- SMA: 10, 20, 50, 100 và 200
+- EMA: 10, 20, 50, 100 và 200
+- WMA: 10, 20, 50, 100 và 200
+- TRIX:
+- CCI: > 100: quá mua  , <-100: quá bán
+
+
+
+7, 25, 34, 89, 200
+lay: EMA, MCAD, BB
+leading: RSI, MFI, ADX, OBV, 

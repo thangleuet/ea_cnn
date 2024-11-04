@@ -1,25 +1,14 @@
 # Ignore everything
 # *
-/outputs
-/train_images
+outputs
 /.idea
-src/__pycache__/
-src/secrets.py
-src/scratch_pad.py
-# /stock_history
+*__pycache__*
 
-
-# But not these files...
-!.gitignore
-# etc...
-
-# ...even if they are in subdirectories
-# !/src
-
-# if the files to be tracked are in subdirectories
-# !*/a/b/file1.txt
-# !*/a/b/c/*
 env
 data
 test
 best_model_keras
+weights
+output
+output_2023
+val
