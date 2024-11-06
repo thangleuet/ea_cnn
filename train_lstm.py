@@ -61,7 +61,7 @@ df_train['labels'] = df_train['labels'].astype(np.int8)
 df_test = pd.read_csv("test/features_test.csv")
 df_test['labels'] = df_test['labels'].astype(np.int8)
 
-list_features = list(df_train.loc[:, 'open':'eom_200'].columns)
+list_features = list(df_train.loc[:, 'open':'bb_200'].columns)
 list_feature_drop = ['y_resistance_max', 'y_resistance_min', 'y_support_max', 'y_support_min']
 list_features = list(set(list_features) - set(list_feature_drop))
 print('Total number of features', len(list_features))

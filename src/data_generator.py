@@ -29,9 +29,9 @@ class DataGenerator:
     def calculate_technical_indicators(self, df, col_name, intervals):
         get_RSI_smooth(df, col_name, intervals)  # momentum
         get_williamR(df, col_name, intervals)  # momentum
-        get_mfi(df, intervals)  # momentum
+        # get_mfi(df, intervals)  # momentum
         get_ROC(df, col_name, intervals)  # momentum
-        get_CMF(df, col_name, intervals)  # momentum
+        # get_CMF(df, col_name, intervals)  # momentum
         get_CMO(df, col_name, intervals)  # momentum
         get_SMA(df, col_name, intervals)
         get_SMA(df, 'open', intervals)
@@ -46,12 +46,12 @@ class DataGenerator:
         get_kst(df, col_name, intervals)  # Trend
         get_DMI(df, col_name, intervals)  # trend
         get_BB_MAV(df, col_name, intervals)  # volatility
-        get_force_index(df, intervals)  # volume
-        get_kdjk_rsv(df, intervals)
-        get_OBV(df)  # volume
-        get_EOM(df, col_name, intervals)  # volume momentum
-        get_volume_delta(df)  # volume
-        get_IBR(df)
+        # get_force_index(df, intervals)  # volume
+        # get_kdjk_rsv(df, intervals)
+        # get_OBV(df)  # volume
+        # get_EOM(df, col_name, intervals)  # volume momentum
+        # get_volume_delta(df)  # volume
+        # get_IBR(df)
 
     def create_labels_price(self, df, col_name, window_size=12):
         """
