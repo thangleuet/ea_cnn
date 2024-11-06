@@ -52,13 +52,16 @@ df_test = pd.read_csv("test/features_test.csv")
 df_test['labels'] = df_test['labels'].astype(np.int8)
 
 list_features = list(df_train.loc[:, 'open':'eom_200'].columns)
+list_feature_drop = ['y_resistance_max', 'y_resistance_min', 'y_support_max', 'y_support_min']
+list_features = list(set(list_features) - set(list_feature_drop))
+
 print('Total number of features', len(list_features))
-x_train = df_train.loc[200:, 'open':'eom_200'].values
+
+x_train = df_train.loc[200:, list_features].values
 y_train = df_train['labels'][200:].values
 
-x_test = df_test.loc[:, 'open':'eom_200'].values
+x_test = df_test.loc[:, list_features].values
 y_test =  df_test['labels'].values
-
 
 mm_scaler = StandardScaler() # or StandardScaler?
 x_train = mm_scaler.fit_transform(x_train)
@@ -69,6 +72,9 @@ folder_model_path = 'weights'
 if not os.path.exists(folder_model_path):
     os.makedirs(folder_model_path)
 np.save(os.path.join(folder_model_path, 'scaler.npy'), mm_scaler)
+
+# Save list_features
+np.save(os.path.join(folder_model_path, 'list_features.npy'), list_features)
 
 x_main = x_train.copy()
 print("Shape of x, y train/test {} {} {} {}".format(x_train.shape, y_train.shape, x_test.shape, y_test.shape))
@@ -125,7 +131,7 @@ params = {'batch_size': 80, 'conv2d_layers': {'conv2d_do_1': 0.2, 'conv2d_filter
                                                'conv2d_filters_2': 64, 'conv2d_kernel_size_2': 3, 'conv2d_mp_2': 2, 'conv2d_strides_2': 1, 
                                                'kernel_regularizer_2': 0.0, 'layers': 'two'}, 
            'dense_layers': {'dense_do_1': 0.3, 'dense_nodes_1': 128, 'kernel_regularizer_1': 0.0, 'layers': 'one'},
-           'epochs': 200, 'lr': 0.001, 'optimizer': 'adam'}
+           'epochs': 300, 'lr': 0.001, 'optimizer': 'adam'}
 
 
 
@@ -146,18 +152,16 @@ rlp = ReduceLROnPlateau(monitor='val_loss', factor=0.02, patience=20, verbose=1,
 mcp = ModelCheckpoint(best_model_path, monitor='val_f1_metric', verbose=1,
                       save_best_only=True, save_weights_only=False, mode='max', period=1)  # val_f1_metric
 
-mcp_periodic = ModelCheckpoint(
-    filepath='model_epoch_{epoch:02d}.h5', verbose=1, save_weights_only=False,
-    save_freq=10 * (len(x_train) // 128)  # Lưu mỗi 10 epoch
-)
+# mcp_periodic = ModelCheckpoint(
+#     filepath='model_epoch_{epoch:02d}.h5', verbose=1, save_weights_only=False,
+#     save_freq=10 * (len(x_train) // 128)  # Lưu mỗi 10 epoch
+# )
 
 history = model.fit(x_train, y_train, epochs=params['epochs'], verbose=1,
                             batch_size=128, shuffle=False,
                             validation_data=(x_test, y_test),
-                             callbacks=[mcp, mcp_periodic, rlp]
+                             callbacks=[mcp, rlp]
                             , sample_weight=sample_weights)
-
-
 
 plt.figure()
 plt.plot(history.history['loss'])
@@ -180,7 +184,7 @@ print("keras evaluate =", test_res)
 # Predict and filter by confidence > 0.9
 pred = model.predict(x_test)
 pred_probs = np.max(pred, axis=1)  # Max probability for each prediction
-confident_mask = pred_probs > 0.9  # Filter predictions with confidence > 0.9
+confident_mask = pred_probs > 0.8  # Filter predictions with confidence > 0.9
 
 # Get predicted and true classes with confidence > 0.9
 pred_classes = np.argmax(pred, axis=1)[confident_mask]

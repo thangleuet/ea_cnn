@@ -167,13 +167,21 @@ def get_RSI(df, col_name, intervals):
     for i in intervals:
         df['rsi_' + str(i)] = df_ss['rsi_' + str(i)]
 
-        del df['close_-1_s']
-        del df['close_-1_d']
-        del df['rs_' + str(i)]
-
         df['rsi_' + str(intervals[0])] = rsi(df['close'], i, fillna=True)
     print("RSI with stockstats done")
 
+def get_stochRSI(df, col_name, intervals):
+    """
+    stockstats lib seems to use 'close' column by default so col_name
+    not used here.
+    This calculates non-smoothed RSI
+    """
+    df_ss = sdf.retype(df)
+    for i in intervals:
+        df['stochrsi_' + str(i)] = df_ss['stochrsi_' + str(i)]
+
+        df['stochrsi_' + str(intervals[0])] = stochrsi(df['close'], i, fillna=True)
+    print("StochRSI with stockstats done")
 
 def get_RSI_smooth(df, col_name, intervals):
     """

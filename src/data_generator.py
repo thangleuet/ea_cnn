@@ -122,7 +122,7 @@ class DataGenerator:
         pbar.close()
         return labels
 
-    def create_labels(self, df, col_name, window_size=19):
+    def create_labels(self, df, col_name, window_size=11):
         """
         Data is labeled as per the logic in research paper
         Label code : BUY => 1, SELL => 0, HOLD => 2
@@ -276,6 +276,10 @@ class DataGenerator:
                 durration_trend = 0
                 number_pullback = 0
 
+            df.at[i, 'trend_name'] = trend_name
+            df.at[i, 'durration_trend'] = durration_trend
+            df.at[i, 'number_pullback'] = number_pullback
+
             # td, ha
             td_seq_ha = ast.literal_eval(technical_data[i][0]).get('td_sequential_ha', None)
             td_seq = ast.literal_eval(technical_data[i][0]).get('td_sequential', None)
@@ -287,9 +291,38 @@ class DataGenerator:
                 df.at[i, 'td_seq_ha_number'] = int(td_seq_ha[0])
                 df.at[i, 'td_seq_ha_trend'] = 0 if 'up' in td_seq_ha else 1
 
-            df.at[i, 'trend_name'] = trend_name
-            df.at[i, 'durration_trend'] = durration_trend
-            df.at[i, 'number_pullback'] = number_pullback
+            # Resistance
+            list_resistances = ast.literal_eval(technical_data[i][0]).get('resistances_list', None)
+            if len(list_resistances) > 0:
+                resistance = list_resistances[0]
+                y_resistance_max = max(resistance[1], resistance[2])
+                y_resistance_min = min(resistance[1], resistance[2])
+                number_touch_resistance = resistance[3]
+                count_candle_touch_resistance = sum(resistance[4])
+            else:
+                y_resistance_max = df.loc[i]["high"]
+                y_resistance_min = df.loc[i]["high"]
+                number_touch_resistance = 1
+                count_candle_touch_resistance = 1
+
+            # Support
+            list_supports = ast.literal_eval(technical_data[i][0]).get('supports_list', None)
+            if len(list_supports) > 0:
+                support = list_supports[0]
+                y_support_max = min(support[1], support[2])
+                y_support_min = max(support[1], support[2])
+                number_touch_support = support[3]
+                count_candle_touch_support = sum(support[4])
+            else:
+                y_support_min = df.loc[i]["low"]
+                y_support_max = df.loc[i]["low"]
+                number_touch_support = 1
+                count_candle_touch_support = 1
+
+            df.at[i, 'y_resistance_max'] = y_resistance_max
+            df.at[i, 'y_support_max'] = y_support_max
+            df.at[i, 'y_resistance_min'] = y_resistance_min
+            df.at[i, 'y_support_min'] = y_support_min
         return df
                 
     def create_features(self):

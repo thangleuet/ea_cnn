@@ -34,7 +34,7 @@ def get_sample_weights(y):
     print("value_counts", np.unique(y, return_counts=True))
     sample_weights = y.copy().astype(float)
     for i in np.unique(y):
-        sample_weights[sample_weights == i] = class_weights[i]  # if i == 2 else 0.8 * class_weights[i]
+        sample_weights[sample_weights == i] = class_weights[i] if i == 2 else 1.5 * class_weights[i]
     return sample_weights
 
 def check_baseline(pred, y_test):
@@ -62,11 +62,13 @@ df_test = pd.read_csv("test/features_test.csv")
 df_test['labels'] = df_test['labels'].astype(np.int8)
 
 list_features = list(df_train.loc[:, 'open':'eom_200'].columns)
+list_feature_drop = ['y_resistance_max', 'y_resistance_min', 'y_support_max', 'y_support_min']
+list_features = list(set(list_features) - set(list_feature_drop))
 print('Total number of features', len(list_features))
-x_train = df_train.loc[200:, 'open':'eom_200'].values
+x_train = df_train.loc[200:, list_features].values
 y_train = df_train['labels'][200:].values
 
-x_test = df_test.loc[:, 'open':'eom_200'].values
+x_test = df_test.loc[:, list_features].values
 y_test =  df_test['labels'].values
 
 
@@ -75,15 +77,18 @@ x_train = mm_scaler.fit_transform(x_train)
 x_test = mm_scaler.transform(x_test)
 
 # save scaler
-folder_model_path = 'weights'
+folder_model_path = 'weights_lstm'
 if not os.path.exists(folder_model_path):
     os.makedirs(folder_model_path)
 np.save(os.path.join(folder_model_path, 'scaler.npy'), mm_scaler)
 
+# Save list_features
+np.save(os.path.join(folder_model_path, 'list_features.npy'), list_features)
+
 x_main = x_train.copy()
 print("Shape of x, y train/test {} {} {} {}".format(x_train.shape, y_train.shape, x_test.shape, y_test.shape))
 
-num_features = 81  # should be a perfect square
+num_features = 81   # should be a perfect square
 timesteps = 12
 selection_method = 'all'
 topk = 150 if selection_method == 'all' else num_features
@@ -109,12 +114,13 @@ if selection_method == 'all':
 # Save feat_idx
 np.save(os.path.join(folder_model_path, 'feat_idx.npy'), feat_idx)
 
-if selection_method == 'all':
-    x_train = x_train[:, feat_idx]
-    x_test = x_test[:, feat_idx]
+# if selection_method == 'all':
+#     x_train = x_train[:, feat_idx]
+#     x_test = x_test[:, feat_idx]
+num_features = x_train.shape[1]
 
-x_train_seq, y_train_seq = create_sequences(x_train, y_train, timesteps)
-x_test_seq, y_test_seq = create_sequences(x_test, y_test, timesteps)
+x_train, y_train = create_sequences(x_train, y_train, timesteps)
+x_test, y_test = create_sequences(x_test, y_test, timesteps)
 
 _labels, _counts = np.unique(y_train, return_counts=True)
 print("percentage of class 0 = {}, class 1 = {}".format(_counts[0]/len(y_train) * 100, _counts[1]/len(y_train) * 100))
@@ -139,21 +145,15 @@ best_model_path = os.path.join(folder_model_path, 'best_model.h5')
 
 rlp = ReduceLROnPlateau(monitor='val_loss', factor=0.02, patience=20, verbose=1, mode='min',
                         min_delta=0.001, cooldown=1, min_lr=0.001)
-mcp = ModelCheckpoint(best_model_path, monitor='val_loss', verbose=1,
+mcp = ModelCheckpoint(best_model_path, monitor='val_f1_metric', verbose=1,
                       save_best_only=True, save_weights_only=False, mode='max', period=1)  # val_f1_metric
 
-mcp_periodic = ModelCheckpoint(
-    filepath='model_epoch_{epoch:02d}.h5', verbose=1, save_weights_only=False,
-    save_freq=10 * (len(x_train) // 128)  # Lưu mỗi 10 epoch
-)
 
 history = model.fit(x_train, y_train, epochs=params['epochs'], verbose=1,
                             batch_size=128, shuffle=False,
                             validation_data=(x_test, y_test),
-                             callbacks=[mcp, mcp_periodic, rlp]
+                             callbacks=[mcp, rlp]
                             , sample_weight=sample_weights)
-
-
 
 plt.figure()
 plt.plot(history.history['loss'])
