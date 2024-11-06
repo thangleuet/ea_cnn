@@ -15,8 +15,8 @@ end_time_format = "2025-01-01 00:00:00"
 name_database = "exness_xau_usd_m15"
 sql_query = f"""
     SELECT id, date_time as Date, open as Open, high as High, low as Low, close as Close,
-        volume, ema7, ema25, ema34, ema89, ema50, ema200,
-        technical_info, smc_info
+        volume,
+        technical_info
     FROM {name_database}
     WHERE date_time BETWEEN '{start_time_format}' AND '{end_time_format}'
     ORDER BY date_time
