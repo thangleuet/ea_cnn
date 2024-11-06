@@ -8,6 +8,7 @@ from tensorflow.python import keras
 from keras.models import load_model
 import tqdm
 
+import matplotlib.pyplot as plt
 from models.model_cnn_utils import create_model_cnn
 
 def check_tp_sl(df_raw, index, predicted_class):
@@ -15,9 +16,11 @@ def check_tp_sl(df_raw, index, predicted_class):
     entry_price = df_raw.iloc[index+ 1]['close']
 
     status_tp = 0
-    tp = 8 - abs(df_raw.iloc[index+ 1]['close'] - df_raw.iloc[index+ 1]['open'])
+    tp = 5 - abs(df_raw.iloc[index+ 1]['close'] - df_raw.iloc[index+ 1]['open'])
+    if tp <= 0:
+        return -1, 0, 0
 
-    for i in range(2, 21):
+    for i in range(2, 51):
         if index + i < len(df_raw):  # Ensure we don't go out of bounds
             current_price = df_raw.loc[index + i]['close']
             if predicted_class == 1:
@@ -30,15 +33,14 @@ def check_tp_sl(df_raw, index, predicted_class):
                 #     status_tp = -1
                 #     break
 
-
                 if entry_price - df_raw.loc[index + i]['low'] >= sl:
                     if status_tp != 2:
                         status_tp = 0
-                        break
+                    break
                 if df_raw.loc[index + i]['high'] - entry_price >= tp:
                     status_tp = 1
                     break
-                if df_raw.loc[index + i]['high'] - entry_price >= 3:
+                if df_raw.loc[index + i]['high'] - entry_price > 1:
                     status_tp = 2
             else:
                 sl = max(max(df_raw.iloc[index]['high'], df_raw.iloc[index+1]['high']) - df_raw.iloc[index+1]['close'] + 1, 5)
@@ -51,18 +53,18 @@ def check_tp_sl(df_raw, index, predicted_class):
                 if df_raw.loc[index + i]['high'] - entry_price >= sl:
                     if status_tp != 2:
                         status_tp = 0
-                        break
+                    break
                 if entry_price - df_raw.loc[index + i]['low'] >= tp:
                     status_tp = 1
                     break
-                if entry_price - df_raw.loc[index + i]['low'] >= 3:
+                if entry_price - df_raw.loc[index + i]['low'] > 1:
                     status_tp = 2
 
     if tp <= 0:
         status_tp = -1
     return status_tp, sl, tp
 def plot_candlestick(df_raw, index, predicted_class, status_tp, sl, tp):  
-    df_candle = df_raw.iloc[index - 20:index + 20][['timestamp', 'open', 'high', 'low', 'close']]
+    df_candle = df_raw.iloc[index - 50:index + 50][['timestamp', 'open', 'high', 'low', 'close']]
     df_candle.set_index('timestamp', inplace=True)         
     # Create output folder based on prediction class (buy/sell)
     output_folder_image = f"output/buy/{status_tp}" if predicted_class == 1 else f"output/sell/{status_tp}"
@@ -77,7 +79,7 @@ def plot_candlestick(df_raw, index, predicted_class, status_tp, sl, tp):
 
     # Initialize an array of NaN with the same length as df_candle
     scatter_data = np.full(len(df_candle), np.nan)
-    scatter_data[20] = df_candle['close'].iloc[20]
+    scatter_data[50] = df_candle['close'].iloc[50]
 
     # Add the scatter plot
     ap = [
@@ -93,6 +95,7 @@ def plot_candlestick(df_raw, index, predicted_class, status_tp, sl, tp):
         addplot=ap, figratio=(12, 6), figscale=1.2,
         savefig=output_image_path
     )
+    plt.clf()
 
 csv_path = "test/features_test.csv"
 df_raw = pd.read_csv(csv_path)
@@ -143,7 +146,7 @@ for i in range(len(input_data)):
     confidence = np.max(pred, axis=1)[0] 
     if i == 174 or i == 3867 or i==2903:
         print(1)
-    if predicted_class in [0, 1] and confidence > 0.8 and i < len(df_raw) - 20 and i >= 20:
+    if predicted_class in [0, 1] and confidence > 0.8 and i < len(df_raw) - 50 and i >= 50:
         status_tp, sl, tp = check_tp_sl(df_raw, i, predicted_class)
 
         if i - current_entry > 5 or current_status != status_tp:

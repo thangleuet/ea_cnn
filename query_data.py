@@ -10,8 +10,8 @@ DB_USER = "xttrade"
 DB_PASSWORD ="Xttrade1234$"
 DB_NAME = "XTTRADE"
 
-start_time_format = "2024-01-01 00:00:00"
-end_time_format = "2025-01-01 00:00:00"
+start_time_format = "2020-01-01 00:00:00"
+end_time_format = "2021-01-01 00:00:00"
 name_database = "exness_xau_usd_m15"
 sql_query = f"""
     SELECT id, date_time as Date, open as Open, high as High, low as Low, close as Close,
@@ -25,5 +25,5 @@ db_url = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}"
 engine = create_engine(db_url, echo=False)
 print(sql_query)
 df_h1 = pd.read_sql(sql_query, con=engine)
-df_h1.to_csv("exness_xau_usd_m15_2024_2025.csv", index=False)
+df_h1.to_csv("exness_xau_usd_m15_2020_2021.csv", index=False)
 print("Query done")
