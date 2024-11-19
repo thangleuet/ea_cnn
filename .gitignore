@@ -14,3 +14,5 @@ output_2023
 val
 output_lstm
 weights_lstm
+output_ha
+csv

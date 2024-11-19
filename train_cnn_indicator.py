@@ -28,13 +28,13 @@ def get_sample_weights(y):
     """
 
     y = y.astype(int)  # compute_class_weight needs int labels
-    class_weights = compute_class_weight('balanced', np.unique(y), y)
+    class_weights = compute_class_weight('balanced' , np.unique(y), y)
     
     print("real class weights are {}".format(class_weights), np.unique(y))
     print("value_counts", np.unique(y, return_counts=True))
     sample_weights = y.copy().astype(float)
     for i in np.unique(y):
-        sample_weights[sample_weights == i] = class_weights[i] if i == 2 else 3 * class_weights[i]
+        sample_weights[sample_weights == i] = class_weights[i] if i == 2 else 1.5 * class_weights[i]
     return sample_weights
 
 def reshape_as_image(x, img_width, img_height):
@@ -45,28 +45,23 @@ def reshape_as_image(x, img_width, img_height):
     return x_temp
 
 # use the path printed in above output cell after running stock_cnn.py. It's in below format
-csv_tain = [f for f in os.listdir('data') if f.endswith('.csv') and 'features' not in f]
-df_train = pd.concat([pd.read_csv(os.path.join('data', f)) for f in csv_tain])
-df_train = df_train.dropna()
-df_train.reset_index(drop=True, inplace=True)
+df_train = pd.read_csv("data/features_data.csv")
+df_train['labels'] = df_train['labels'].astype(np.int8)
 
-# df_train = pd.read_csv("data/features_data.csv")
-# df_train['labels'] = df_train['labels'].astype(np.int8)
-
-df_test = pd.read_csv("test/indicator_data_table_m15_2022.csv")
-df_test = df_test.dropna()
-# df_test['labels'] = df_test['labels'].astype(np.int8)
+df_test = pd.read_csv("test/features_test.csv")
+df_test['labels'] = df_test['labels'].astype(np.int8)
 
 list_features = list(df_train.loc[:, 'open':'bb_200'].columns)
-list_feature_drop = ['y_resistance_max', 'y_resistance_min', 'y_support_max', 'y_support_min', 'td_seq_ha_trend', 'td_seq_ha_number']
-list_features = list(set(list_features) - set(list_feature_drop))
+# list_feature_drop = ['y_resistance_max', 'y_resistance_min', 'y_support_max', 'y_support_min']
+# list_features = list(set(list_features) - set(list_feature_drop))
+
 print('Total number of features', len(list_features))
+
 x_train = df_train.loc[200:, list_features].values
 y_train = df_train['labels'][200:].values
 
 x_test = df_test.loc[:, list_features].values
 y_test =  df_test['labels'].values
-
 
 mm_scaler = StandardScaler() # or StandardScaler?
 x_train = mm_scaler.fit_transform(x_train)
@@ -136,7 +131,7 @@ params = {'batch_size': 80, 'conv2d_layers': {'conv2d_do_1': 0.2, 'conv2d_filter
                                                'conv2d_filters_2': 64, 'conv2d_kernel_size_2': 3, 'conv2d_mp_2': 2, 'conv2d_strides_2': 1, 
                                                'kernel_regularizer_2': 0.0, 'layers': 'two'}, 
            'dense_layers': {'dense_do_1': 0.3, 'dense_nodes_1': 128, 'kernel_regularizer_1': 0.0, 'layers': 'one'},
-           'epochs': 200, 'lr': 0.001, 'optimizer': 'adam'}
+           'epochs': 300, 'lr': 0.001, 'optimizer': 'adam'}
 
 
 
@@ -157,18 +152,16 @@ rlp = ReduceLROnPlateau(monitor='val_loss', factor=0.02, patience=20, verbose=1,
 mcp = ModelCheckpoint(best_model_path, monitor='val_f1_metric', verbose=1,
                       save_best_only=True, save_weights_only=False, mode='max', period=1)  # val_f1_metric
 
-mcp_periodic = ModelCheckpoint(
-    filepath='model_epoch_{epoch:02d}.h5', verbose=1, save_weights_only=False,
-    save_freq=10 * (len(x_train) // 128)  # Lưu mỗi 10 epoch
-)
+# mcp_periodic = ModelCheckpoint(
+#     filepath='model_epoch_{epoch:02d}.h5', verbose=1, save_weights_only=False,
+#     save_freq=10 * (len(x_train) // 128)  # Lưu mỗi 10 epoch
+# )
 
 history = model.fit(x_train, y_train, epochs=params['epochs'], verbose=1,
                             batch_size=128, shuffle=False,
                             validation_data=(x_test, y_test),
-                             callbacks=[mcp, mcp_periodic, rlp]
+                             callbacks=[mcp, rlp]
                             , sample_weight=sample_weights)
-
-
 
 plt.figure()
 plt.plot(history.history['loss'])

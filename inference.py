@@ -17,8 +17,6 @@ def check_tp_sl(df_raw, index, predicted_class):
 
     status_tp = 0
     tp = 5 - abs(df_raw.iloc[index+ 1]['close'] - df_raw.iloc[index+ 1]['open'])
-    if tp <= 0:
-        return -1, 0, 0
 
     for i in range(2, 51):
         if index + i < len(df_raw):  # Ensure we don't go out of bounds

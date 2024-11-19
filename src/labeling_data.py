@@ -34,8 +34,6 @@ def create_labels(self, df, col_name, window_size=11):
 
                 max_index = high_window.idxmax()
                 min_index = low_window.idxmin()
-                max_ = high_window.max()
-                min_ = low_window.min()
 
                 min_after = df.loc[max_index : window_end]['low'].min()
                 max_after = df.loc[min_index : window_end]['high'].max()

@@ -35,11 +35,10 @@ def check_tp_sl(df_raw, index, predicted_class):
                 #     status_tp = -1
                 #     break
 
-
                 if entry_price - df_raw.loc[index + i]['low'] >= sl:
                     if status_tp != 2:
                         status_tp = 0
-                        break
+                    break
                 if df_raw.loc[index + i]['high'] - entry_price >= tp:
                     status_tp = 1
                     break
@@ -56,7 +55,7 @@ def check_tp_sl(df_raw, index, predicted_class):
                 if df_raw.loc[index + i]['high'] - entry_price >= sl:
                     if status_tp != 2:
                         status_tp = 0
-                        break
+                    break
                 if entry_price - df_raw.loc[index + i]['low'] >= tp:
                     status_tp = 1
                     break

@@ -27,7 +27,6 @@ class DataGenerator:
         self.test_duration_years = 1
 
     def calculate_technical_indicators(self, df, col_name, intervals):
-        
         get_RSI_smooth(df, col_name, intervals)  # momentum
         get_williamR(df, col_name, intervals)  # momentum
         # get_mfi(df, intervals)  # momentum
