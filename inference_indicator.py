@@ -13,7 +13,7 @@ import tqdm
 import matplotlib.pyplot as plt
 from models.model_cnn_utils import create_model_cnn
 
-def check_tp_sl_current(df_raw, index, predicted_class, output_ta, main_trend, current_max_high, current_min_low, main_trend_end):
+def check_tp_sl_current(df_raw, index, predicted_class, output_ta, main_trend, current_max_high, current_min_low, main_trend_end, number_ha_candle, check_candle_status_current):
     # Get the close price of the (index + 1) candle
     entry_price = df_raw.iloc[index]['close']
 
@@ -25,7 +25,14 @@ def check_tp_sl_current(df_raw, index, predicted_class, output_ta, main_trend, c
 
     start_value = current_max_high if main_trend == "DOWN" else current_min_low
     end_value = current_min_low if main_trend == "DOWN" else current_max_high
-    
+
+    if predicted_class == 1:
+        if (number_ha_candle < 5 and check_candle_status_current == 1) or (number_ha_candle < 4 and check_candle_status_current == 0):
+            predicted_class = 2
+    elif predicted_class == 0:
+        if (number_ha_candle < 5 and check_candle_status_current == 0) or (number_ha_candle < 4 and check_candle_status_current == 1):
+            predicted_class = 2
+
     if main_trend is not None:
         current_value = df_raw.iloc[index]['high'] if main_trend == "UP" else df_raw.iloc[index]['low']
         percent = (end_value - current_value) / (end_value - start_value)
@@ -37,14 +44,14 @@ def check_tp_sl_current(df_raw, index, predicted_class, output_ta, main_trend, c
         if main_trend == "UP":
             if 0.01 < percent < 0.3 and predicted_class == 0:
                 predicted_class = 0
-                if index - main_trend_end > 20:
-                    predicted_class = -1
+                # if index - main_trend_end > 20:
+                #     predicted_class = -1
             elif percent > 0.5 and predicted_class == 1:
                 predicted_class = 1
-            elif -0.2 < percent < 0.2 and predicted_class == 1:
-                predicted_class = 1
-                if index - main_trend_end < 10:
-                    predicted_class = -1
+            # elif -0.2 < percent < 0.2 and predicted_class == 1:
+            #     predicted_class = 1
+            #     if index - main_trend_end < 10:
+            #         predicted_class = -1
             else:
                 predicted_class = -1
         elif main_trend == "DOWN":
@@ -52,34 +59,19 @@ def check_tp_sl_current(df_raw, index, predicted_class, output_ta, main_trend, c
                 predicted_class = 0
             elif 0.01 < percent < 0.3 and predicted_class == 1:
                 predicted_class = 1
-                if index - main_trend_end > 20:
-                    predicted_class = -1
-            elif -0.2 < percent < 0.2 and predicted_class == 0:
-                predicted_class = 0
-                if index - main_trend_end < 10:
-                    predicted_class = -1
+                # if index - main_trend_end > 20:
+                #     predicted_class = -1ơ mà mai e đ
+            # elif -0.2 < percent < 0.2 and predicted_class == 0:
+            #     predicted_class = 0
+            #     if index - main_trend_end < 10:
+            #         predicted_class = -1
             else:
                 predicted_class = -1
+
+        # if index - main_trend_end < 3:
+        #     predicted_class = -1
     else:
         predicted_class = -1
-
-    if predicted_class == 1:
-        if status_candle_last_1 == 0 and status_candle_current == 1:
-            is_ha_candle_last1_turn_up = 1
-        else:
-            is_ha_candle_last1_turn_up = 0
-        if is_ha_candle_last1_turn_up == 0:
-            status_tp = -1
-            predicted_class = -1
-    else:
-        if status_candle_last_1 == 1 and status_candle_current == 0:
-            is_ha_candle_last1_turn_down = 1
-        else:
-            is_ha_candle_last1_turn_down = 0
-        
-        if is_ha_candle_last1_turn_down == 0:
-            status_tp = -1
-            predicted_class = -1
 
     if predicted_class != -1:
         for i in range(1, 100):
@@ -295,7 +287,7 @@ for i in tqdm.tqdm(range(len(df_raw))):
     if i < 1200:
         continue
 
-    filter_data = [df_raw.iloc[i-1].get(feat) for feat in list_features]
+    filter_data = [df_raw.iloc[i].get(feat) for feat in list_features]
     input_data = np.array(filter_data)
     input_data = scaler.transform(input_data.reshape(1, -1))
     input_data = input_data[:, feat_indx]
@@ -307,7 +299,7 @@ for i in tqdm.tqdm(range(len(df_raw))):
     pred = model.predict(x_temp)
     predicted_class = np.argmax(pred, axis=1)[0]
     confidence = np.max(pred, axis=1)[0] 
-    if i == 1287 or i == 3867 or i==2903:
+    if i == 1266 or i == 3867 or i==2903:
         print(1)
 
     status_candle_last_1 = 1 if eval(output_ta[i - 1])["ha_candle"]["Close"] - eval(output_ta[i - 1])["ha_candle"]["Open"] > 0 else 0
@@ -315,6 +307,12 @@ for i in tqdm.tqdm(range(len(df_raw))):
 
     ha_candle_signal_up_condition = status_candle_last_1 == 0 and status_candle_current == 1
     ha_candle_signal_down_condition = status_candle_last_1 == 1 and status_candle_current == 0
+
+    if ha_status is None or ha_status == status_candle_last_1:
+        number_ha_candle += 1
+    else:
+        number_ha_candle = 1
+    ha_status = status_candle_last_1
 
     if ha_candle_signal_up_condition:
         ha_turn_list.append(("up", i, eval(output_ta[i - 1])["ha_candle"]["Low"]))
@@ -327,7 +325,7 @@ for i in tqdm.tqdm(range(len(df_raw))):
    
     if predicted_class in [0, 1] and 0.9 > confidence > 0.6 and i < len(df_raw) - 100 and i >=100:
         current_rsi = rsi_value[i]
-        status_tp, sl, tp, pred = check_tp_sl_current(df_raw, i, predicted_class, output_ta, main_trend, current_max_high, current_min_low, main_trend_end)
+        status_tp, sl, tp, pred = check_tp_sl_current(df_raw, i, predicted_class, output_ta, main_trend, current_max_high, current_min_low, main_trend_end, number_ha_candle, status_candle_current)
 
         # if i - current_entry > 5 or current_status != pred:
 
