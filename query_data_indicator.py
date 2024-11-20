@@ -19,8 +19,8 @@ DB_USER = "xttrade"
 DB_PASSWORD ="Xttrade1234$"
 DB_NAME = "XTTRADE"
 
-START_TIME_M15 = "2021-01-01 00:00:00"
-END_TIME_M15 = "2022-01-01 00:00:00"
+START_TIME_M15 = "2022-01-01 00:00:00"
+END_TIME_M15 = "2023-01-01 00:00:00"
 
 class EAData:
     def __init__(self, database: str, start_time: str, end_time: str) -> None:

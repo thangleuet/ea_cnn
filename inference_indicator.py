@@ -19,48 +19,24 @@ def check_tp_sl_current(df_raw, index, predicted_class, current_rsi, output_ta):
     status_tp = 0
     tp = 5
     sl = 5
-
-    status_candle_last_4 = 1 if eval(output_ta[index - 4])["ha_candle"]["Close"] - eval(output_ta[index - 4])["ha_candle"]["Open"] > 0 else 0
-    status_candle_last_3 = 1 if eval(output_ta[index - 3])["ha_candle"]["Close"] - eval(output_ta[index - 3])["ha_candle"]["Open"] > 0 else 0
-    status_candle_last_2 = 1 if eval(output_ta[index - 2])["ha_candle"]["Close"] - eval(output_ta[index - 2])["ha_candle"]["Open"] > 0 else 0
     status_candle_last_1 = 1 if eval(output_ta[index - 1])["ha_candle"]["Close"] - eval(output_ta[index - 1])["ha_candle"]["Open"] > 0 else 0
+    status_candle_current = 1 if eval(output_ta[index])["ha_candle"]["Close"] - eval(output_ta[index])["ha_candle"]["Open"] > 0 else 0
 
     if predicted_class == 1:
-        if status_candle_last_4 == 0 and (status_candle_last_3 == 1 or status_candle_last_2 == 1 or status_candle_last_1 == 1):
-            is_ha_candle_last3_turn_up = 1
-        else:
-            is_ha_candle_last3_turn_up = 0
-        if status_candle_last_3 == 0 and (status_candle_last_2 == 1 or status_candle_last_1 == 1):
-            is_ha_candle_last2_turn_up = 1
-        else:
-            is_ha_candle_last2_turn_up = 0
-        if status_candle_last_2 == 0 and status_candle_last_1 == 1:
+        if status_candle_last_1 == 0 and status_candle_current == 1:
             is_ha_candle_last1_turn_up = 1
         else:
             is_ha_candle_last1_turn_up = 0
-        
-        ha_candle_turn_up_condition = is_ha_candle_last3_turn_up or is_ha_candle_last2_turn_up or is_ha_candle_last1_turn_up
-
-        if ha_candle_turn_up_condition == 0:
+        if is_ha_candle_last1_turn_up == 0:
             status_tp = -1
             predicted_class = -1
     else:
-        if status_candle_last_4 == 1 and (status_candle_last_3 == 0 or status_candle_last_2 == 0 or status_candle_last_1 == 0):
-            is_ha_candle_last3_turn_down = 1
-        else:
-            is_ha_candle_last3_turn_down = 0
-        if status_candle_last_3 == 1 and (status_candle_last_2 == 0 or status_candle_last_1 == 0):
-            is_ha_candle_last2_turn_down = 1
-        else:
-            is_ha_candle_last2_turn_down = 0
-        if status_candle_last_2 == 1 and status_candle_last_1 == 0:
+        if status_candle_last_1 == 1 and status_candle_current == 0:
             is_ha_candle_last1_turn_down = 1
         else:
             is_ha_candle_last1_turn_down = 0
         
-        ha_candle_turn_down_condition = is_ha_candle_last3_turn_down or is_ha_candle_last2_turn_down or is_ha_candle_last1_turn_down
-
-        if ha_candle_turn_down_condition == 0:
+        if is_ha_candle_last1_turn_down == 0:
             status_tp = -1
             predicted_class = -1
 
@@ -154,7 +130,7 @@ def plot_candlestick(df_raw, index, predicted_class, status_tp, sl, tp, conf, cu
 
     return number_ha_candle, ha_status
 
-csv_path = r"indicator_data_table_m15_2021.csv"
+csv_path = r"indicator_data_table_m15_2022.csv"
 df_raw = pd.read_csv(csv_path)
 list_features = np.load('weights/list_features.npy', allow_pickle='TRUE')
 
@@ -211,28 +187,9 @@ for i in tqdm.tqdm(range(len(df_raw))):
     confidence = np.max(pred, axis=1)[0] 
     if i == 1240 or i == 3867 or i==2903:
         print(1)
-    ha_candle_current = eval(output_ta[i])["ha_candle"]
-    ha_candle_prev = eval(output_ta[i - 1])["ha_candle"]
-
-    if ha_candle_current["Close"] - ha_candle_current["Open"] > 0:
-        check_candle_status_current = 1
-    else:
-        check_candle_status_current = 0
-
-    if ha_candle_prev["Close"] - ha_candle_prev["Open"] > 0:
-        check_candle_status_prev = 1
-    else:
-        check_candle_status_prev = 0
-
-    if ha_status is None or ha_status == check_candle_status_prev:
-        number_ha_candle += 1
-    else:
-        number_ha_candle = 1
-    ha_status = check_candle_status_prev
 
     if predicted_class in [0, 1] and 0.9 > confidence > 0.6 and i < len(df_raw) - 50 and i >=50:
         current_rsi = rsi_value[i]
-
         status_tp, sl, tp, pred = check_tp_sl_current(df_raw, i, predicted_class, current_rsi, output_ta)
 
         # if i - current_entry > 5 or current_status != pred:

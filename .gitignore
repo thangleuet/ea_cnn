@@ -10,9 +10,11 @@ test
 best_model_keras
 weights
 output
-output_2023
+output_2021
 val
 output_lstm
 weights_lstm
 output_ha
 csv
+indicator_data_table_m15_2021.csv
+indicator_data_table_m15_2022.csv

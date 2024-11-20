@@ -32,11 +32,6 @@ PyQt5==5.15.10
 PyQtWebEngine==5.15.6
 pywin32==305.1
 requests-oauthlib==2.0.0
-rfc3339-validator @ file:///C:/b/abs_ddfmseb_vm/croot/rfc3339-validator_1683077054906/work
-rfc3986-validator @ file:///C:/b/abs_6e9azihr8o/croot/rfc3986-validator_1683059049737/work
-rich @ file:///C:/b/abs_21nw9z7xby/croot/rich_1720637504376/work
-rope @ file:///C:/b/abs_a4uy0nuc8z/croot/rope_1708963217026/work
-rpds-py @ file:///C:/b/abs_76j4g4la23/croot/rpds-py_1698947348047/work
 rsa==4.9
 Rtree @ file:///C:/b/abs_e116ltblik/croot/rtree_1675157871717/work
 s3fs @ file:///C:/b/abs_ddtjx92ddb/croot/s3fs_1724924140381/work
