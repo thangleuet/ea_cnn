@@ -171,7 +171,7 @@ def plot_predict(df_raw, start_index, end_index, list_predict, list_ema_7, list_
     ax1.set_title('Predict Price')
     ax1.set_ylabel('Price')
     
-    for index, confidence, predicted_class, candlestick_pattern in list_predict:
+    for index, confidence, predicted_class, candlestick_pattern, count_ha in list_predict:
         candle_type = candlestick_pattern["candle_type"]
         candle_pattern = candlestick_pattern["candle_pattern"]
         next_trend = candlestick_pattern["next_trend"]
@@ -179,7 +179,7 @@ def plot_predict(df_raw, start_index, end_index, list_predict, list_ema_7, list_
         price = df_raw.iloc[index]['close']
         color = 'green' if predicted_class == 1 else 'red'
         ax1.scatter([index-start_index], [price], color=color, s=100)
-        ax1.text(index-start_index, df_raw.iloc[index]['low'], f"{round(confidence, 2)}", fontsize=10, ha='center', va='center', color=color)
+        ax1.text(index-start_index, df_raw.iloc[index]['low'], f"{round(count_ha, 2)}", fontsize=10, ha='center', va='center', color=color)
         if candle_type in CANDLE_PATTERN or candle_type in CANDLE_DOUBLE or candle_type in CANDLE_TRIPPLE_PATTERN:
             ax1.text(index-start_index, price, f"{candle_type}_{next_trend}", fontsize=10, color=color)
     time_stamp = df_raw.iloc[start_index]['timestamp'].replace('-', '').replace(':', '').replace(' ', '')
@@ -322,6 +322,7 @@ for index in tqdm.tqdm(range(len(df_raw))):
     confidence = float(np.max(pred, axis=1)[0])
     
     current_date = pd.to_datetime(df_raw.iloc[index]['timestamp']).dayofyear
+    count_ha = df_raw.iloc[index]['streak_count']
     if start_date is None:
         start_date = current_date
         start_index = index
@@ -335,7 +336,7 @@ for index in tqdm.tqdm(range(len(df_raw))):
     #     if (1 in list_predict_class and candle_type == 1) or (0 in list_predict_class and candle_type == 0):
     if predicted_class in [0, 1]:
             # predicted_class = 1 if 1 in list_predict_class else 0
-            list_predict.append([index, confidence, predicted_class, candlestick_pattern])
+            list_predict.append([index, confidence, predicted_class, candlestick_pattern, count_ha])
             number_ha_candle, ha_status, status = plot_candlestick(df_raw, index, predicted_class, confidence)
             if "TP" in status:
                 count_tp += 1

@@ -20,8 +20,8 @@ DB_USER = "xttrade"
 DB_PASSWORD ="Xttrade1234$"
 DB_NAME = "XTTRADE"
 
-START_TIME_M15 = "2023-01-01 00:00:00"
-END_TIME_M15 = "2024-01-01 00:00:00"
+START_TIME_M15 = "2020-02-01 00:00:00"
+END_TIME_M15 = "2021-01-01 00:00:00"
 
 CANDLE_PATTERN = [1, 2, 3, 4, 6, 7, 8, 9]
 CANDLE_DOUBLE = [10, 11, 12, 13, 14, 15]
@@ -65,8 +65,8 @@ class EAData:
         """
         sql_query = self.get_data()
         df_pd = pd.read_sql(sql_query, con=self.engine)
-        window_size = 7
-        price = 15
+        window_size = 11
+        price = 10
         df_pd["labels"] = 2
         # save to csv
         for index, row in tqdm.tqdm(df_pd.iterrows()):
@@ -129,13 +129,15 @@ class EAData:
                     min_index_after, min_after = self.find_first_greater(low_values_after, min_value, False)
                     max_after = max(high_values_after[:min_index_after])
                     
-                if max_index == window_middle and current_price - min_after >= price and diff_ema_34_89 < 0 and diff_ema_89 > -2:
+                # if max_index == window_middle and current_price - min_after >= price and diff_ema_34_89 < 0 and diff_ema_89 > -2:
+                if max_index == window_middle and current_price - min_after >= price:
                     df_pd.loc[window_middle, 'labels'] = 0  # SELL
                     for i in range(1, 4):
                         if current_price - df_pd.loc[window_middle+i, 'close'] < 2 and df_pd.loc[window_middle+i, 'close'] - min_after >= price:
                             df_pd.loc[window_middle+i, 'labels'] = 0
                     
-                elif min_index == window_middle and max_after - current_price >= price and diff_ema_34_89 > 0 and diff_ema_89 < 2:
+                # elif min_index == window_middle and max_after - current_price >= price and diff_ema_34_89 > 0 and diff_ema_89 < 2:
+                elif min_index == window_middle and max_after - current_price >= price:
                     df_pd.loc[window_middle, 'labels'] = 1 # BUY
                     for i in range(1, 4):
                         if df_pd.loc[window_middle + i, 'close'] - current_price < 2 and max_after - df_pd.loc[window_middle + i, 'close'] >= price:

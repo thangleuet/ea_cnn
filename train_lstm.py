@@ -17,6 +17,7 @@ import os
 from sklearn.metrics import confusion_matrix, cohen_kappa_score
 from matplotlib import pyplot as plt
 from models.model_lstm_utils import create_model_lstm
+from sklearn.metrics import precision_score, recall_score
 
 def get_sample_weights(y):
     """
@@ -60,7 +61,7 @@ df_train = pd.concat([pd.read_csv(os.path.join('data', f)) for f in csv_tain])
 df_train.reset_index(drop=True, inplace=True)
 df_train.drop(columns=["output_ta"], inplace=True) 
 df_train.drop(columns=["candle_type"], inplace=True)
-# df_train.drop(columns=["ema_7","ema_14", "ema_17", "ema_21", "ema_25", "ema_34", "ema_89", "ema_50"], inplace=True)
+df_train.drop(columns=["ema_7","ema_14", "ema_17", "ema_21", "ema_25", "ema_34", "ema_89", "ema_50"], inplace=True)
 
 df_train = df_train.dropna()
 df_train['labels'] = df_train['labels'].astype("int")
@@ -72,8 +73,8 @@ df_test['labels'] = df_test['labels'].astype("int")
 
 df_train.reset_index(drop=True, inplace=True)
 
-# list_features = list(df_train.loc[:,"open":].columns)
-list_features = ["open", "high", "low", "close", "ema_34", "ema_89"]
+list_features = list(df_train.loc[:,"open":].columns)
+# list_features = ["open", "high", "low", "close", "ema_34", "ema_89"]
 # remove labels
 list_features = [feature for feature in list_features if 'labels' not in feature]
 
@@ -194,3 +195,19 @@ print("Confusion Matrix:", conf_mat)
 print("F1 score (weighted):", f1_score(y_test_classes, pred_classes, average='weighted'))
 print("Cohen's Kappa:", cohen_kappa_score(y_test_classes, pred_classes))
 
+conf_mat = confusion_matrix(y_test_classes, pred_classes)
+print(conf_mat)
+
+precision = precision_score(y_test_classes, pred_classes, average=None)
+recall = recall_score(y_test_classes, pred_classes, average=None)
+
+# Print results
+print("Precision for each class:", precision)
+print("Recall for each class:", recall)
+
+# Weighted precision and recall
+precision_weighted = precision_score(y_test_classes, pred_classes, average='weighted')
+recall_weighted = recall_score(y_test_classes, pred_classes, average='weighted')
+
+print("Weighted Precision:", precision_weighted)
+print("Weighted Recall:", recall_weighted)
