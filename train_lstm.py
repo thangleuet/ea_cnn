@@ -34,7 +34,7 @@ def get_sample_weights(y):
     print("value_counts", np.unique(y, return_counts=True))
     sample_weights = y.copy().astype(float)
     for i in np.unique(y):
-        sample_weights[sample_weights == i] = class_weights[i] if i == 2 else 1.5 * class_weights[i]
+        sample_weights[sample_weights == i] = class_weights[i]  if i == 2 else 1.5 * class_weights[i]
     return sample_weights
 
 def check_baseline(pred, y_test):
@@ -55,24 +55,41 @@ def create_sequences(x, y, timestep):
     return np.array(x_seq), np.array(y_seq)
 
 # use the path printed in above output cell after running stock_cnn.py. It's in below format
-df_train = pd.read_csv("data/features_data.csv")
-df_train['labels'] = df_train['labels'].astype(np.int8)
+csv_tain = [f for f in os.listdir('data') if f.endswith('.csv') and 'features' not in f]
+df_train = pd.concat([pd.read_csv(os.path.join('data', f)) for f in csv_tain])
+df_train.reset_index(drop=True, inplace=True)
+df_train.drop(columns=["output_ta"], inplace=True) 
+df_train.drop(columns=["candle_type"], inplace=True)
+# df_train.drop(columns=["ema_7","ema_14", "ema_17", "ema_21", "ema_25", "ema_34", "ema_89", "ema_50"], inplace=True)
 
-df_test = pd.read_csv("test/features_test.csv")
-df_test['labels'] = df_test['labels'].astype(np.int8)
+df_train = df_train.dropna()
+df_train['labels'] = df_train['labels'].astype("int")
 
-list_features = list(df_train.loc[:, 'open':'bb_200'].columns)
-list_feature_drop = ['y_resistance_max', 'y_resistance_min', 'y_support_max', 'y_support_min']
-list_features = list(set(list_features) - set(list_feature_drop))
+df_test = pd.read_csv("test/indicator_data_xau_table_h1_2023_10.csv")
+df_test.drop(columns=["output_ta"], inplace=True) 
+df_test = df_test.dropna()
+df_test['labels'] = df_test['labels'].astype("int")
+
+df_train.reset_index(drop=True, inplace=True)
+
+# list_features = list(df_train.loc[:,"open":].columns)
+list_features = ["open", "high", "low", "close", "ema_34", "ema_89"]
+# remove labels
+list_features = [feature for feature in list_features if 'labels' not in feature]
+
+# list_feature_drop = ['y_resistance_max', 'y_resistance_min', 'y_support_max', 'y_support_min', 'td_seq_ha_trend', 'td_seq_ha_number']
+# list_feature_drop = [feature for feature in list_features if 'rsi' in feature]
+# list_features = list(set(list_features) - set(list_feature_drop))
 print('Total number of features', len(list_features))
-x_train = df_train.loc[200:, list_features].values
-y_train = df_train['labels'][200:].values
+x_train = df_train.loc[:, list_features].values
+y_train = df_train['labels'].values
 
 x_test = df_test.loc[:, list_features].values
 y_test =  df_test['labels'].values
 
 
-mm_scaler = StandardScaler() # or StandardScaler?
+# mm_scaler = StandardScaler() # or StandardScaler?
+mm_scaler = MinMaxScaler(feature_range=(0, 1))
 x_train = mm_scaler.fit_transform(x_train)
 x_test = mm_scaler.transform(x_test)
 
@@ -81,38 +98,36 @@ folder_model_path = 'weights_lstm'
 if not os.path.exists(folder_model_path):
     os.makedirs(folder_model_path)
 np.save(os.path.join(folder_model_path, 'scaler.npy'), mm_scaler)
-
-# Save list_features
 np.save(os.path.join(folder_model_path, 'list_features.npy'), list_features)
 
 x_main = x_train.copy()
 print("Shape of x, y train/test {} {} {} {}".format(x_train.shape, y_train.shape, x_test.shape, y_test.shape))
 
-num_features = 81   # should be a perfect square
+num_features = 49  # should be a perfect square
 timesteps = 12
 selection_method = 'all'
-topk = 150 if selection_method == 'all' else num_features
+topk = 55 if selection_method == 'all' else num_features
 
-select_k_best = SelectKBest(f_classif, k=topk)
-select_k_best.fit(x_main, y_train)
-selected_features_anova = itemgetter(*select_k_best.get_support(indices=True))(list_features)
-print("****************************************")
+# select_k_best = SelectKBest(f_classif, k=topk)
+# select_k_best.fit(x_main, y_train)
+# selected_features_anova = itemgetter(*select_k_best.get_support(indices=True))(list_features)
+# print("****************************************")
 
-select_k_best = SelectKBest(mutual_info_classif, k=topk)
-select_k_best.fit(x_main, y_train)
-selected_features_mic = itemgetter(*select_k_best.get_support(indices=True))(list_features)
+# select_k_best = SelectKBest(mutual_info_classif, k=topk)
+# select_k_best.fit(x_main, y_train)
+# selected_features_mic = itemgetter(*select_k_best.get_support(indices=True))(list_features)
 
-if selection_method == 'all':
-    common = list(set(selected_features_anova).intersection(selected_features_mic))
-    if len(common) < num_features:
-        raise Exception('number of common features found {} < {} required features. Increase "topk variable"'.format(len(common), num_features))
-    feat_idx = []
-    for c in common:
-        feat_idx.append(list_features.index(c))
-    feat_idx = sorted(feat_idx[0:num_features])
+# if selection_method == 'all':
+#     common = list(set(selected_features_anova).intersection(selected_features_mic))
+#     if len(common) < num_features:
+#         raise Exception('number of common features found {} < {} required features. Increase "topk variable"'.format(len(common), num_features))
+#     feat_idx = []
+#     for c in common:
+#         feat_idx.append(list_features.index(c))
+#     feat_idx = sorted(feat_idx[0:num_features])
 
 # Save feat_idx
-np.save(os.path.join(folder_model_path, 'feat_idx.npy'), feat_idx)
+# np.save(os.path.join(folder_model_path, 'feat_idx.npy'), feat_idx)
 
 # if selection_method == 'all':
 #     x_train = x_train[:, feat_idx]
@@ -127,14 +142,14 @@ print("percentage of class 0 = {}, class 1 = {}".format(_counts[0]/len(y_train) 
 
 sample_weights = get_sample_weights(y_train)
 
-one_hot_enc = OneHotEncoder(sparse=False, categories='auto')  # , categories='auto'
+one_hot_enc = OneHotEncoder(sparse_output=False, categories='auto')  # , categories='auto'
 y_train = one_hot_enc.fit_transform(y_train.reshape(-1, 1))
 y_test = one_hot_enc.transform(y_test.reshape(-1, 1))
 
 params = {
-    'lstm_units': 128,
-    'dropout_rate': 0.3,
-    'dense_units': 64,
+    'lstm_units': 64,
+    'dropout_rate': 0.2,
+    'dense_units': 32,
     'dense_dropout': 0.3,
     'optimizer': 'adam',
     'epochs': 200,
@@ -142,12 +157,12 @@ params = {
 }
 model = create_model_lstm(params, timesteps,num_features, 3)
 best_model_path = os.path.join(folder_model_path, 'best_model.h5')
+# best_model_path = 'model_epoch_200.h5'
 
 rlp = ReduceLROnPlateau(monitor='val_loss', factor=0.02, patience=20, verbose=1, mode='min',
                         min_delta=0.001, cooldown=1, min_lr=0.001)
 mcp = ModelCheckpoint(best_model_path, monitor='val_f1_metric', verbose=1,
                       save_best_only=True, save_weights_only=False, mode='max', period=1)  # val_f1_metric
-
 
 history = model.fit(x_train, y_train, epochs=params['epochs'], verbose=1,
                             batch_size=128, shuffle=False,

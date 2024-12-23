@@ -7,6 +7,34 @@ from keras import backend as K
 from keras.utils import get_custom_objects
 from models.metrics import f1_weighted, f1_metric
 
+def focal_loss(gamma=2., alpha=0.25):
+    """
+    Focal Loss function.
+    Args:
+    - gamma (float): Exponent for modulating the loss (default=2).
+    - alpha (float): Weighting factor to balance the importance between 
+      easy and hard examples (default=0.25).
+    Returns:
+    - A function that calculates focal loss for multi-class classification.
+    """
+    def focal_loss_fixed(y_true, y_pred):
+        # Clip prediction to prevent log(0)
+        y_pred = K.clip(y_pred, K.epsilon(), 1 - K.epsilon())
+        
+        # Calculate cross entropy
+        cross_entropy = -y_true * K.log(y_pred)
+        
+        # Calculate modulating factor (1 - p_t)^gamma
+        weight = K.pow(1 - y_pred, gamma)
+        
+        # Calculate the focal loss
+        loss = alpha * weight * cross_entropy
+        
+        # Return the mean loss over all samples
+        return K.sum(loss, axis=1)
+
+    return focal_loss_fixed
+
 def create_model_cnn(params):
     model = Sequential()
     
@@ -16,7 +44,7 @@ def create_model_cnn(params):
                            kernel_regularizer=regularizers.l2(params["conv2d_layers"]["kernel_regularizer_1"]), 
                            padding='same',activation="relu", use_bias=True,
                            kernel_initializer='glorot_uniform',
-                           input_shape=(9,9,3))
+                           input_shape=(7,7,1))
     model.add(conv2d_layer1)
     if params["conv2d_layers"]['conv2d_mp_1'] > 1:
         model.add(MaxPool2D(pool_size=params["conv2d_layers"]['conv2d_mp_1']))
@@ -46,7 +74,7 @@ def create_model_cnn(params):
                         kernel_regularizer=params['dense_layers']["kernel_regularizer_1"]))
         model.add(Dropout(params['dense_layers']['dense_do_2']))
 
-    model.add(Dense(3, activation='softmax'))
+    model.add(Dense(3, activation='softmax')) 
     
     if params["optimizer"] == 'rmsprop':
         optimizer = optimizers.RMSprop(lr=params["lr"])
