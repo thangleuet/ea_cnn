@@ -20,8 +20,8 @@ DB_USER = "xttrade"
 DB_PASSWORD ="Xttrade1234$"
 DB_NAME = "XTTRADE"
 
-START_TIME_M15 = "2020-02-01 00:00:00"
-END_TIME_M15 = "2021-01-01 00:00:00"
+START_TIME_M15 = "2024-01-01 00:00:00"
+END_TIME_M15 = "2024-10-15 00:00:00"
 
 CANDLE_PATTERN = [1, 2, 3, 4, 6, 7, 8, 9]
 CANDLE_DOUBLE = [10, 11, 12, 13, 14, 15]
@@ -77,8 +77,35 @@ class EAData:
             for key, value in indicator_data.items():
                 df_pd.loc[index, key] = value
 
+            # if 1 < index < len(df_pd) - 30:
+            #     macd = df_pd.loc[index, "macd"]
+            #     macd_signal = df_pd.loc[index, "macd_signal"]
+            #     rsi = df_pd.loc[index, "rsi_14"]
+                
+            #     current_price = df_pd.loc[index, "Close"]
+                
+            #     high_values_after = []
+            #     low_values_after = []
+            #     j = index + 1
+                
+            #     while j < index +30:
+            #         high = df_pd.loc[j, "High"]
+            #         low = df_pd.loc[j, "Low"]
+            #         high_values_after.append(high)
+            #         low_values_after.append(low)
+            #         if rsi < 40 and macd > macd_signal and df_pd.loc[index-1, "macd"] < df_pd.loc[index-1, "macd_signal"]:
+            #             if high - current_price > price and current_price - min(low_values_after) < 2:
+            #                 df_pd.loc[index, "labels"] = 1
+            #                 break
+            #         elif rsi > 60 and macd < macd_signal and df_pd.loc[index-1, "macd"] > df_pd.loc[index-1, "macd_signal"]:
+            #             if current_price - low > price and max(high_values_after) - current_price < 2:
+            #                 df_pd.loc[index, "labels"] = 0
+            #                 break
+            #         j += 1
+                
+           
             # labeling data
-            if index >= window_size - 1 and index < len(df_pd) - 20:
+            if index >= window_size - 1 and index < len(df_pd) - 30:
                 window_begin = index - (window_size - 1)
                 window_end = index
                 window_middle = int((window_begin + window_end) / 2)
@@ -89,13 +116,15 @@ class EAData:
                 low_values_after = []
                 current_price = df_pd.loc[window_middle, 'close']
                 diff_ema_34_89 = df_pd.loc[window_middle, 'diff_ema_34_89']
-                diff_ema_89 = df_pd.loc[window_middle, 'diff_ema_89']
+                macd = df_pd.loc[index, "macd"]
+                macd_signal = df_pd.loc[index, "macd_signal"]
+                rsi = df_pd.loc[window_middle, 'rsi_14']
 
                 # Lấy giá trị cao/thấp từ từng chỉ báo trong cửa sổ
                 for indicator in indicator_window:
                     indicator = eval(indicator.replace('NaN', '2'))
-                    high = indicator["high"]
-                    low = indicator["low"]
+                    high = indicator["close"]
+                    low = indicator["close"]
                     high_values.append(high)
                     low_values.append(low)
                     
@@ -109,8 +138,8 @@ class EAData:
                     indicator_window_after = df_pd.loc[max_index + 1 : window_end+30]["indicator_data"]
                     for indicator in indicator_window_after:
                         indicator = eval(indicator.replace('NaN', '2'))
-                        high = indicator["high"]
-                        low = indicator["low"]
+                        high = indicator["close"]
+                        low = indicator["close"]
                         high_values_after.append(high)
                         low_values_after.append(low)
 
@@ -129,18 +158,20 @@ class EAData:
                     min_index_after, min_after = self.find_first_greater(low_values_after, min_value, False)
                     max_after = max(high_values_after[:min_index_after])
                     
-                # if max_index == window_middle and current_price - min_after >= price and diff_ema_34_89 < 0 and diff_ema_89 > -2:
                 if max_index == window_middle and current_price - min_after >= price:
-                    df_pd.loc[window_middle, 'labels'] = 0  # SELL
-                    for i in range(1, 4):
-                        if current_price - df_pd.loc[window_middle+i, 'close'] < 2 and df_pd.loc[window_middle+i, 'close'] - min_after >= price:
+                # if max_index == window_middle and current_price - min_after >= price:
+                    if diff_ema_34_89 < 0 and rsi > 60:
+                        df_pd.loc[window_middle, 'labels'] = 0  # SELL
+                    for i in range(1, 3):
+                        if current_price - df_pd.loc[window_middle+i, 'close'] < 2 and df_pd.loc[window_middle+i, 'close'] - min_after >= price and df_pd.loc[window_middle+i, 'diff_ema_7_25'] < 0 and df_pd.loc[window_middle+i, 'rsi_14'] > 60:
                             df_pd.loc[window_middle+i, 'labels'] = 0
-                    
-                # elif min_index == window_middle and max_after - current_price >= price and diff_ema_34_89 > 0 and diff_ema_89 < 2:
+                
                 elif min_index == window_middle and max_after - current_price >= price:
-                    df_pd.loc[window_middle, 'labels'] = 1 # BUY
-                    for i in range(1, 4):
-                        if df_pd.loc[window_middle + i, 'close'] - current_price < 2 and max_after - df_pd.loc[window_middle + i, 'close'] >= price:
+                    if diff_ema_34_89 > 0 and rsi < 40:
+                # elif min_index == window_middle and max_after - current_price >= price:
+                        df_pd.loc[window_middle, 'labels'] = 1 # BUY
+                    for i in range(1, 3):
+                        if df_pd.loc[window_middle + i, 'close'] - current_price < 2 and max_after - df_pd.loc[window_middle + i, 'close'] >= price and df_pd.loc[window_middle+i, 'diff_ema_7_25'] > 0 and df_pd.loc[window_middle+i, 'rsi_14'] < 40:
                             df_pd.loc[window_middle+i, 'labels'] = 1 
                     
                 # count label

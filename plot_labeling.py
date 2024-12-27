@@ -51,7 +51,7 @@ def plot_predict(df_raw, start_index, end_index, list_predict):
     ax1.set_ylabel('Price')
     list_ema_7 = []
     list_ema_25 = []
-    for index, predicted_class, candlestick_pattern, ema_7, ema_25 in list_predict:
+    for index, predicted_class, candlestick_pattern, ema_7, ema_25, rsi in list_predict:
         candle_type = candlestick_pattern["candle_type"]
         candle_pattern = candlestick_pattern["candle_pattern"]
         next_trend = candlestick_pattern["next_trend"]
@@ -63,8 +63,10 @@ def plot_predict(df_raw, start_index, end_index, list_predict):
         color = 'green' if predicted_class == 1 else 'red'
         if predicted_class in [0, 1]:
             ax1.scatter([index-start_index], [price], color=color, s=100)
+            ax1.text(index-start_index, price+2, f"{int(rsi)}", fontsize=10, color=color)
         if candle_type in CANDLE_PATTERN or candle_type in CANDLE_DOUBLE or candle_type in CANDLE_TRIPPLE_PATTERN:
             ax1.text(index-start_index, price, f"{candle_type}", fontsize=10, color=color)
+        
             
     # plot ema_7 and ema_25
     ax1.plot(list_ema_7, color='blue', label='ema_7')
@@ -84,6 +86,7 @@ def plot_predict(df_raw, start_index, end_index, list_predict):
     
 list_label = []  
 start_date = None
+current_year = None
 end_date = None 
 csv_path = r"indicator_data_xau_table_h1_2023_10.csv"
 df_raw = pd.read_csv(csv_path)
@@ -91,6 +94,11 @@ for index in tqdm.tqdm(range(len(df_raw))):
     label = df_raw.iloc[index]['labels']
     candlestick_pattern = df_raw.iloc[index]['candlestick_pattern']
     current_date = pd.to_datetime(df_raw.iloc[index]['timestamp']).dayofyear
+    year = pd.to_datetime(df_raw.iloc[index]['timestamp']).year
+    rsi = df_raw.iloc[index]['rsi_14']
+    if current_year is None or current_year != year:
+        current_year = year
+        start_date = None
     if start_date is None:
         start_date = current_date
         start_index = index
@@ -98,7 +106,7 @@ for index in tqdm.tqdm(range(len(df_raw))):
     candlestick_pattern = eval(candlestick_pattern.replace('null', '2').replace('false', '0').replace('true', '1'))
     ema_25 = df_raw.iloc[index]['ema_89']
     ema_7 = df_raw.iloc[index]['ema_34']
-    list_label.append((index, label, candlestick_pattern, ema_7, ema_25))
+    list_label.append((index, label, candlestick_pattern, ema_7, ema_25, rsi))
     if current_date - start_date > 9:
         end_date = current_date
         end_index = index

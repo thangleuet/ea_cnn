@@ -18,6 +18,13 @@ from sklearn.metrics import confusion_matrix, cohen_kappa_score
 from matplotlib import pyplot as plt
 from models.model_cnn_utils import create_model_cnn
 
+def create_sequences(x, y, timestep):
+    x_seq, y_seq = [], []
+    for i in range(len(x) - timestep):
+        x_seq.append(x[i:i + timestep])  # Lấy 12 bước thời gian
+        y_seq.append(y[i + timestep])  # Nhãn tương ứng với thời điểm tiếp theo
+    return np.array(x_seq), np.array(y_seq)
+
 def get_sample_weights(y):
     """
     calculate the sample weights based on class weights. Used for models with
@@ -34,7 +41,7 @@ def get_sample_weights(y):
     print("value_counts", np.unique(y, return_counts=True))
     sample_weights = y.copy().astype(float)
     for i in np.unique(y):
-        sample_weights[sample_weights == i] = class_weights[i] if i == 2 else 1.2 * class_weights[i]
+        sample_weights[sample_weights == i] = class_weights[i] if i == 2 else 1.5 * class_weights[i]
     return sample_weights
 
 def reshape_as_image(x, img_width, img_height):
@@ -52,9 +59,8 @@ df_train.drop(columns=["output_ta"], inplace=True)
 df_train = df_train.dropna()
 df_train['labels'] = df_train['labels'].astype("int")
 
-df_train.drop(columns=["candle_type"], inplace=True)
-df_train.drop(columns=["ema_7","ema_14", "ema_17", "ema_21", "ema_25", "ema_34", "ema_89", "ema_50"], inplace=True)
-
+df_train.drop(columns=["ha_open", "ha_high", "ha_low", "ha_close", "candle_type"], inplace=True)
+df_train.drop(columns=["ema_7","ema_14", "ema_17", "ema_21", "ema_25", "ema_34", "ema_89", "ema_50", "count_ema_34"], inplace=True)
 
 df_test = pd.read_csv("test/indicator_data_xau_table_h1_2023_10.csv")
 df_test.drop(columns=["output_ta"], inplace=True) 
@@ -62,7 +68,7 @@ df_test.drop(columns=["output_ta"], inplace=True)
 df_test = df_test.dropna()
 df_test['labels'] = df_test['labels'].astype("int")
 
-list_features = list(df_train.loc[:,"close":].columns)
+list_features = list(df_train.loc[:,"open":].columns)
 # remove labels
 list_features = [feature for feature in list_features if 'labels' not in feature]
 
@@ -91,7 +97,7 @@ np.save(os.path.join(folder_model_path, 'list_features.npy'), list_features)
 x_main = x_train.copy()
 print("Shape of x, y train/test {} {} {} {}".format(x_train.shape, y_train.shape, x_test.shape, y_test.shape))
 
-num_features = 49  # should be a perfect square
+num_features = 25  # should be a perfect square
 
 select_k_best = SelectKBest(f_classif, k=num_features)
 select_k_best.fit(x_main, y_train)
@@ -111,6 +117,11 @@ np.save(os.path.join(folder_model_path, 'feat_idx.npy'), feat_idx)
 x_train = x_train[:, feat_idx]
 x_test = x_test[:, feat_idx]
 
+# num_features = x_train.shape[1]
+# timesteps = 5
+# x_train, y_train = create_sequences(x_train, y_train, timesteps)
+# x_test, y_test = create_sequences(x_test, y_test, timesteps)
+
 _labels, _counts = np.unique(y_train, return_counts=True)
 print("percentage of class 0 = {}, class 1 = {}".format(_counts[0]/len(y_train) * 100, _counts[1]/len(y_train) * 100))
 
@@ -126,6 +137,7 @@ x_test = reshape_as_image(x_test, dim, dim)
 # adding a 1-dim for channels (3)
 x_train = np.stack((x_train,) * 1, axis=-1)
 x_test = np.stack((x_test,) * 1, axis=-1)
+
 print("final shape of x, y train/test {} {} {} {}".format(x_train.shape, y_train.shape, x_test.shape, y_test.shape))
 
 
@@ -134,7 +146,7 @@ params = {'batch_size': 80, 'conv2d_layers': {'conv2d_do_1': 0.2, 'conv2d_filter
                                                'conv2d_filters_2': 64, 'conv2d_kernel_size_2': 3, 'conv2d_mp_2': 2, 'conv2d_strides_2': 1, 
                                                'kernel_regularizer_2': 0.0, 'layers': 'two'}, 
            'dense_layers': {'dense_do_1': 0.3, 'dense_nodes_1': 128, 'kernel_regularizer_1': 0.0, 'layers': 'one'},
-           'epochs': 200, 'lr': 0.001, 'optimizer': 'adam'}
+           'epochs': 500, 'lr': 0.001, 'optimizer': 'adam'}
 
 def check_baseline(pred, y_test):
     print("size of test set", len(y_test))
@@ -154,7 +166,7 @@ mcp = ModelCheckpoint(best_model_path, monitor='val_f1_metric', verbose=1,
                       save_best_only=True, save_weights_only=False, mode='max', period=1)  # val_f1_metric
 
 history = model.fit(x_train, y_train, epochs=params['epochs'], verbose=1,
-                            batch_size=64, shuffle=False,
+                            batch_size=128, shuffle=False,
                             validation_data=(x_test, y_test),
                              callbacks=[mcp, rlp]
                             , sample_weight=sample_weights)

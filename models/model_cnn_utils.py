@@ -35,7 +35,7 @@ def focal_loss(gamma=2., alpha=0.25):
 
     return focal_loss_fixed
 
-def create_model_cnn(params):
+def create_model_cnn(params, timesteps=5, num_features=5):
     model = Sequential()
     
     conv2d_layer1 = Conv2D(params["conv2d_layers"]["conv2d_filters_1"],
@@ -44,7 +44,7 @@ def create_model_cnn(params):
                            kernel_regularizer=regularizers.l2(params["conv2d_layers"]["kernel_regularizer_1"]), 
                            padding='same',activation="relu", use_bias=True,
                            kernel_initializer='glorot_uniform',
-                           input_shape=(7,7,1))
+                           input_shape=(timesteps, num_features,1))
     model.add(conv2d_layer1)
     if params["conv2d_layers"]['conv2d_mp_1'] > 1:
         model.add(MaxPool2D(pool_size=params["conv2d_layers"]['conv2d_mp_1']))

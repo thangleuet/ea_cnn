@@ -60,7 +60,8 @@ csv_tain = [f for f in os.listdir('data') if f.endswith('.csv') and 'features' n
 df_train = pd.concat([pd.read_csv(os.path.join('data', f)) for f in csv_tain])
 df_train.reset_index(drop=True, inplace=True)
 df_train.drop(columns=["output_ta"], inplace=True) 
-df_train.drop(columns=["candle_type"], inplace=True)
+
+df_train.drop(columns=["candle_type", "rsi_7", "diff_ema_25", "diff_ema_89"], inplace=True)
 df_train.drop(columns=["ema_7","ema_14", "ema_17", "ema_21", "ema_25", "ema_34", "ema_89", "ema_50"], inplace=True)
 
 df_train = df_train.dropna()
@@ -105,9 +106,9 @@ x_main = x_train.copy()
 print("Shape of x, y train/test {} {} {} {}".format(x_train.shape, y_train.shape, x_test.shape, y_test.shape))
 
 num_features = 49  # should be a perfect square
-timesteps = 12
+timesteps = 5
 selection_method = 'all'
-topk = 55 if selection_method == 'all' else num_features
+# topk = 55 if selection_method == 'all' else num_features
 
 # select_k_best = SelectKBest(f_classif, k=topk)
 # select_k_best.fit(x_main, y_train)
@@ -153,7 +154,7 @@ params = {
     'dense_units': 32,
     'dense_dropout': 0.3,
     'optimizer': 'adam',
-    'epochs': 200,
+    'epochs': 500,
     'batch_size': 128,
 }
 model = create_model_lstm(params, timesteps,num_features, 3)

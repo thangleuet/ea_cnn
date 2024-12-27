@@ -179,7 +179,7 @@ def plot_predict(df_raw, start_index, end_index, list_predict, list_ema_7, list_
         price = df_raw.iloc[index]['close']
         color = 'green' if predicted_class == 1 else 'red'
         ax1.scatter([index-start_index], [price], color=color, s=100)
-        ax1.text(index-start_index, df_raw.iloc[index]['low'], f"{round(count_ha, 2)}", fontsize=10, ha='center', va='center', color=color)
+        ax1.text(index-start_index, df_raw.iloc[index]['low']-2, f"{round(confidence, 2)}", fontsize=12, ha='center', va='center', color=color)
         if candle_type in CANDLE_PATTERN or candle_type in CANDLE_DOUBLE or candle_type in CANDLE_TRIPPLE_PATTERN:
             ax1.text(index-start_index, price, f"{candle_type}_{next_trend}", fontsize=10, color=color)
     time_stamp = df_raw.iloc[start_index]['timestamp'].replace('-', '').replace(':', '').replace(' ', '')
@@ -196,61 +196,8 @@ def plot_predict(df_raw, start_index, end_index, list_predict, list_ema_7, list_
     plt.savefig(output_image_path)
     plt.clf()
     
-def trend_analys(ha_turn_list, offset):
-    main_trend = None
-    main_trend_start = None
-    main_trend_end = None
-    entry_direction = None
-    current_max_high = None
-    current_min_low = None
-    
-    start = max(0, len(ha_turn_list) - offset)
-    min_max_index = start
-    len_list = len(ha_turn_list)
 
-    while min_max_index < len_list:
-        max_high = -float('inf')
-        min_low = float('inf')
-        max_high_index = min_low_index = -1
-        max_high_date_time = min_low_date_time = None
-
-        # Tìm giá trị cao nhất và thấp nhất trong danh sách
-        for i in range(min_max_index, len_list):
-            value = ha_turn_list[i][2]
-            date_time = ha_turn_list[i][1]
-            if value >= max_high:
-                max_high = value
-                max_high_index = i
-                max_high_date_time = date_time
-            if value <= min_low:
-                min_low = value
-                min_low_index = i
-                min_low_date_time = date_time
-
-        # Xác định xu hướng chính nếu chênh lệch >= 10
-        diff = abs(max_high - min_low)
-        if max_high_index > min_low_index and diff >= 10:
-            main_trend = "UP"
-            main_trend_start = min_low_date_time
-            main_trend_end = max_high_date_time
-            min_max_index = max_high_index + 1
-            current_max_high = max_high
-            current_min_low = min_low
-            
-        elif max_high_index < min_low_index and diff >= 10:
-            main_trend = "DOWN"
-            main_trend_start = max_high_date_time
-            main_trend_end = min_low_date_time
-            min_max_index = min_low_index + 1
-            current_max_high = max_high
-            current_min_low = min_low
-        else:
-            min_max_index += 1
-
-    entry_direction = "BUY" if main_trend == "UP" else "SELL" if main_trend == "DOWN" else None
-    return main_trend, entry_direction, main_trend_start, main_trend_end, current_max_high, current_min_low
-
-csv_path = r"indicator_data_xau_table_h1_2023_10.csv"
+csv_path = r"indicator_data_xau_table_h1_2024_10.csv"
 df_raw = pd.read_csv(csv_path)
 
 list_features = np.load('weights/list_features.npy', allow_pickle='TRUE')
@@ -294,6 +241,7 @@ end_date = None
 list_ema_7 = []
 list_ema_25 = []
 list_predict_class = []
+current_index = 0
 for index in tqdm.tqdm(range(len(df_raw))):
     if  index >= len(df_raw) - 100 or index < 100:
         continue
@@ -302,16 +250,16 @@ for index in tqdm.tqdm(range(len(df_raw))):
     input_data = scaler.transform(input_data.reshape(1, -1))
     input_data = input_data[:, feat_indx]
     candlestick_pattern = df_raw.iloc[index]['candlestick_pattern']
-    ema_25 = df_raw.iloc[index]['ema_34']
-    ema_7 = df_raw.iloc[index]['ema_89']
+    ema_7 = df_raw.iloc[index]['ema_34']
+    ema_25 = df_raw.iloc[index]['ema_89']
     list_ema_7.append(ema_7)
     list_ema_25.append(ema_25)
 
     ha_candle_status = df_raw.iloc[index]['streak_count']
     candle_type = df_raw.iloc[index]['ha_type']
-   
+ 
     batch_x = input_data
-    x_temp = np.reshape(batch_x, (7, 7))
+    x_temp = np.reshape(batch_x, (5, 5))
     x_temp = np.stack((x_temp,) * 1, axis=-1)
     x_temp = np.expand_dims(x_temp, axis=0)
     output = model(x_temp)
@@ -322,21 +270,23 @@ for index in tqdm.tqdm(range(len(df_raw))):
     confidence = float(np.max(pred, axis=1)[0])
     
     current_date = pd.to_datetime(df_raw.iloc[index]['timestamp']).dayofyear
-    count_ha = df_raw.iloc[index]['streak_count']
+    count_ema = df_raw.iloc[index]['rsi_14']
     if start_date is None:
         start_date = current_date
         start_index = index
         
     candlestick_pattern = eval(candlestick_pattern.replace('null', '2').replace('false', '0').replace('true', '1'))
-    if confidence < 0.7 or confidence > 0.9:
+    if confidence < 0.7:
         predicted_class = 2
+    if predicted_class == 1 and count_ema > 40:
+        predicted_class = 2
+    if predicted_class == 0 and count_ema < 60:
+        predicted_class = 2
+    
     list_predict_class.append(predicted_class)
     list_predict_class = list_predict_class[-2:]
-    # if ha_candle_status == 1:
-    #     if (1 in list_predict_class and candle_type == 1) or (0 in list_predict_class and candle_type == 0):
     if predicted_class in [0, 1]:
-            # predicted_class = 1 if 1 in list_predict_class else 0
-            list_predict.append([index, confidence, predicted_class, candlestick_pattern, count_ha])
+            list_predict.append([index, confidence, predicted_class, candlestick_pattern, count_ema])
             number_ha_candle, ha_status, status = plot_candlestick(df_raw, index, predicted_class, confidence)
             if "TP" in status:
                 count_tp += 1
@@ -346,6 +296,7 @@ for index in tqdm.tqdm(range(len(df_raw))):
                 count_fail += 1
         
             print(f"TP: {count_tp} SL: {count_sl}")
+    current_index = index
     
     if current_date - start_date > 9:
         end_date = current_date
