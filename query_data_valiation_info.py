@@ -48,6 +48,7 @@ class ValiationInfo:
             SELECT open_order_id, order_type, order_direction, entry_price, entry_date_time, close_price, close_date_time, volume, tp_price, sl_price, pl, entry_validation_info 
             FROM {self.database} 
             WHERE ea_id IN ({id_eas_str}) 
+            AND order_type = 'CLOSE'
             AND created_at BETWEEN '{self.start_time}' AND '{self.end_time}' 
             ORDER BY created_at
         """
@@ -72,6 +73,7 @@ class ValiationInfo:
         df_pd = pd.read_sql(sql_query, con=self.engine)
         df_pd = df_pd.drop_duplicates()
         df_feature = pd.DataFrame()
+        intervals = [7, 25] 
         for index, row in df_pd.iterrows():
             entry_validation_info = eval(row["entry_validation_info"].replace('null', '2'). replace('false', '0').replace('true', '1'))
             entry_time = row["entry_date_time"]
@@ -86,11 +88,18 @@ class ValiationInfo:
                     if value in signal:
                         value = signal[value]
                 df_feature.loc[index, key] = value
-            
+            df_feature.loc[index, "entry_date_time"] = entry_time
             #label
             pl = row["pl"]
             df_feature.loc[index, "labels"] = 0 if pl < 0 else 1
-        print(df_feature["labels"].value_counts())    
+        print(df_feature["labels"].value_counts()) 
+        
+        df_feature["diff_y_time_1"] =  df_feature["entry_price"] - df_feature["diff_y_time_1"]
+        df_feature["diff_y_time_2"] =  df_feature["entry_price"] - df_feature["diff_y_time_2"]
+        df_feature["delta_ema34_89"] = df_feature["ema34"] - df_feature["ema89"]
+        df_feature["delta_close_ema34"] = df_feature["close"] - df_feature["ema34"]
+        df_feature["delta_close_ema89"] = df_feature["close"] - df_feature["ema89"] 
+        # df_feature = df_feature.drop_duplicates(subset=['entry_date_time']) 
         df_feature.to_csv(f"indicator_data_xau_valiation.csv", index=False)
         
 if __name__ == "__main__":

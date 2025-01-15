@@ -26,13 +26,21 @@ scaler = StandardScaler()
 x_train_scaled = scaler.fit_transform(x_train)
 x_test_scaled = scaler.transform(x_test)
 
-x_train_tensor = tf.convert_to_tensor(x_train_scaled, dtype=tf.float32)
-x_test_tensor = tf.convert_to_tensor(x_test_scaled, dtype=tf.float32)
 y_train_tensor = tf.convert_to_tensor(y_train.values, dtype=tf.int64)  # Cần dtype là int64 cho classification
 y_test_tensor = tf.convert_to_tensor(y_test.values, dtype=tf.int64)
 
+x_train_reshaped = x_train_scaled.reshape(x_train_scaled.shape[0], x_train_scaled.shape[1], 1)
+x_test_reshaped = x_test_scaled.reshape(x_test_scaled.shape[0], x_test_scaled.shape[1], 1)
+
+x_train_tensor = tf.convert_to_tensor(x_train_reshaped, dtype=tf.float32)
+x_test_tensor = tf.convert_to_tensor(x_test_reshaped, dtype=tf.float32)
+
 model = models.Sequential([
-    layers.InputLayer(input_shape=(x_train_tensor.shape[1],)),  
+    layers.Conv1D(filters=32, kernel_size=3, activation='relu', input_shape=(x_train_tensor.shape[1], 1)),  
+    layers.MaxPooling1D(pool_size=2),  
+    layers.Conv1D(filters=64, kernel_size=3, activation='relu'),  
+    layers.MaxPooling1D(pool_size=2),  
+    layers.Flatten(),  
     layers.Dense(64, activation='relu'),  
     layers.Dense(32, activation='relu'), 
     layers.Dense(2, activation='softmax')  
@@ -46,7 +54,7 @@ model.compile(optimizer='adam',
 model.summary()
 
 checkpoint = ModelCheckpoint(
-    "nn_model_confirm.h5",  
+    "cnn_model_confirm.h5",  
     monitor="val_loss",  # Tiêu chí để theo dõi
     save_best_only=True,  # Chỉ lưu model tốt nhất
     mode="min",  # Lưu khi giá trị nhỏ hơn là tốt hơn
@@ -62,7 +70,6 @@ history = model.fit(
     validation_split=0.1,
     callbacks=[checkpoint]  # Thêm callback vào đây
 )
-
 plt.figure()
 plt.plot(history.history['loss'])
 plt.plot(history.history['val_loss'])
@@ -76,7 +83,7 @@ plt.legend(['train_loss', 'val_loss', 'accuracy', 'val_accuracy'], loc='upper le
 plt.show()
 
 # Đánh giá mô hình
-model = load_model("nn_model_confirm.h5")
+model = load_model("cnn_model_confirm.h5")
 test_loss, test_accuracy = model.evaluate(x_test_tensor, y_test_tensor)
 
 print(f'Test Loss: {test_loss:.4f}')

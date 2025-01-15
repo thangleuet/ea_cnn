@@ -4,11 +4,9 @@ import numpy as np
 from sklearn.discriminant_analysis import StandardScaler
 from sklearn.preprocessing import MaxAbsScaler, MinMaxScaler, OneHotEncoder
 from operator import itemgetter
-from sklearn.feature_selection import SelectKBest, f_classif, mutual_info_classif
-import tensorflow as tf
-from tensorflow.python import keras
-from keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, CSVLogger, Callback
-from keras.models import Sequential, load_model
+from sklearn.feature_selection import SelectKBest, f_classif
+from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
+from keras.models import  load_model
 from sklearn.utils.class_weight import compute_class_weight
 import tensorflow as tf
 from functools import *
@@ -59,16 +57,16 @@ df_train.drop(columns=["output_ta"], inplace=True)
 df_train = df_train.dropna()
 df_train['labels'] = df_train['labels'].astype("int")
 
-df_train.drop(columns=["ha_open", "ha_high", "ha_low", "ha_close", "candle_type"], inplace=True)
-df_train.drop(columns=["ema_7","ema_14", "ema_17", "ema_21", "ema_25", "ema_34", "ema_89", "ema_50", "count_ema_34"], inplace=True)
+df_train.drop(columns=["ha_open", "ha_high", "ha_low", "ha_close"], inplace=True)
+# df_train.drop(columns=["ema_7","ema_14", "ema_17", "ema_21", "ema_25", "ema_34", "ema_89", "ema_50", "upperband", "lowerband"], inplace=True)
 
-df_test = pd.read_csv("test/indicator_data_xau_table_h1_2023_10.csv")
+df_test = pd.read_csv("test/indicator_data_xau_table_h1_2022_0.005.csv")
 df_test.drop(columns=["output_ta"], inplace=True) 
 
 df_test = df_test.dropna()
 df_test['labels'] = df_test['labels'].astype("int")
 
-list_features = list(df_train.loc[:,"open":].columns)
+list_features = list(df_train.loc[:,"close":].columns)
 # remove labels
 list_features = [feature for feature in list_features if 'labels' not in feature]
 
@@ -117,11 +115,6 @@ np.save(os.path.join(folder_model_path, 'feat_idx.npy'), feat_idx)
 x_train = x_train[:, feat_idx]
 x_test = x_test[:, feat_idx]
 
-# num_features = x_train.shape[1]
-# timesteps = 5
-# x_train, y_train = create_sequences(x_train, y_train, timesteps)
-# x_test, y_test = create_sequences(x_test, y_test, timesteps)
-
 _labels, _counts = np.unique(y_train, return_counts=True)
 print("percentage of class 0 = {}, class 1 = {}".format(_counts[0]/len(y_train) * 100, _counts[1]/len(y_train) * 100))
 
@@ -140,14 +133,6 @@ x_test = np.stack((x_test,) * 1, axis=-1)
 
 print("final shape of x, y train/test {} {} {} {}".format(x_train.shape, y_train.shape, x_test.shape, y_test.shape))
 
-
-params = {'batch_size': 80, 'conv2d_layers': {'conv2d_do_1': 0.2, 'conv2d_filters_1': 64, 'conv2d_kernel_size_1': 3, 'conv2d_mp_1': 0, 
-                                               'conv2d_strides_1': 1, 'kernel_regularizer_1': 0.0, 'conv2d_do_2': 0.3, 
-                                               'conv2d_filters_2': 64, 'conv2d_kernel_size_2': 3, 'conv2d_mp_2': 2, 'conv2d_strides_2': 1, 
-                                               'kernel_regularizer_2': 0.0, 'layers': 'two'}, 
-           'dense_layers': {'dense_do_1': 0.3, 'dense_nodes_1': 128, 'kernel_regularizer_1': 0.0, 'layers': 'one'},
-           'epochs': 500, 'lr': 0.001, 'optimizer': 'adam'}
-
 def check_baseline(pred, y_test):
     print("size of test set", len(y_test))
     e = np.equal(pred, y_test)
@@ -157,7 +142,7 @@ def check_baseline(pred, y_test):
     holds = np.unique(y_test, return_counts=True)[1][2]  # number 'hold' predictions
     print("baseline acc:", (holds/len(y_test)*100))
 
-model = create_model_cnn(params)
+model = create_model_cnn()
 best_model_path = os.path.join(folder_model_path, 'best_model.h5')
 
 rlp = ReduceLROnPlateau(monitor='val_loss', factor=0.02, patience=20, verbose=1, mode='min',
@@ -165,7 +150,7 @@ rlp = ReduceLROnPlateau(monitor='val_loss', factor=0.02, patience=20, verbose=1,
 mcp = ModelCheckpoint(best_model_path, monitor='val_f1_metric', verbose=1,
                       save_best_only=True, save_weights_only=False, mode='max', period=1)  # val_f1_metric
 
-history = model.fit(x_train, y_train, epochs=params['epochs'], verbose=1,
+history = model.fit(x_train, y_train, epochs=100, verbose=1,
                             batch_size=128, shuffle=False,
                             validation_data=(x_test, y_test),
                              callbacks=[mcp, rlp]

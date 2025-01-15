@@ -13,7 +13,7 @@ import tqdm
 import matplotlib.pyplot as plt
 from models.model_cnn_utils import create_model_cnn
 
-CANDLE_PATTERN = {"Hammer": 1, "Inverted Hammer": 2, "Hanging Man": 3, "Shooting Star": 4, "Marubozu" : 5, "Doji": 6, "Dragonfly Doji": 7, "Gravestone Doji": 8, "Spinning Top": 9}
+CANDLE_PATTERN = {"Hammer": 1, "Inverted Hammer": 2, "Hanging Man": 3, "Shooting Star": 4, "Marubozu" : 5, "Doji": 6, "Dragonfly Doji": 7, "Gravestone Doji": 8, "SpinningTop": 9}
 
 CANDLE_DOUBLE = {"Bullish Engulfing": 10, "Bearish Engulfing": 11, "Piercing": 12, 
                   "Dark Cloud Cover": 13, "Bullish Harami": 14, "Bearish Harami": 15}
@@ -74,20 +74,20 @@ def plot_candlestick(df_raw, index, predicted_class, confidence):
     ax1.set_title('Predict Price')
     ax1.set_ylabel('Price')
     
-    tp = 10
-    sl = 10
+    tp = 0.005
+    sl = 0.005
     entry_price = df_candle['close'].iloc[100]
     
     if predicted_class == 1:
-        tp_price = entry_price + tp
-        sl_price = entry_price - sl
-        ax1.axhline(y= df_candle['close'].iloc[100] + tp, color='green', linestyle='--', alpha=0.5)
-        ax1.axhline(y= df_candle['close'].iloc[100] - sl, color='red', linestyle='--', alpha=0.5)
+        tp_price = entry_price + tp*entry_price
+        sl_price = entry_price - sl*entry_price
+        ax1.axhline(y= df_candle['close'].iloc[100] + tp*entry_price, color='green', linestyle='--', alpha=0.5)
+        ax1.axhline(y= df_candle['close'].iloc[100] - sl*entry_price, color='red', linestyle='--', alpha=0.5)
     else:
-        tp_price = entry_price - tp
-        sl_price = entry_price + sl
-        ax1.axhline(y= df_candle['close'].iloc[100] - tp, color='green', linestyle='--', alpha=0.5)
-        ax1.axhline(y= df_candle['close'].iloc[100] + sl, color='red', linestyle='--', alpha=0.5)
+        tp_price = entry_price - tp*entry_price
+        sl_price = entry_price + sl*entry_price
+        ax1.axhline(y= df_candle['close'].iloc[100] - tp*entry_price, color='green', linestyle='--', alpha=0.5)
+        ax1.axhline(y= df_candle['close'].iloc[100] + sl*entry_price, color='red', linestyle='--', alpha=0.5)
     
     status = "In progress"
     count = 0
@@ -136,21 +136,10 @@ def plot_candlestick(df_raw, index, predicted_class, confidence):
 
     return number_ha_candle, ha_status, status
 
-def plot_predict(df_raw, start_index, end_index, list_predict, list_ema_7, list_ema_25):
+def plot_predict(df_raw, start_index, end_index, list_predict, list_ema_7, list_ema_25, list_ema_34, list_ema_89, list_upperband, list_lowerband):
     df_candle = df_raw.iloc[start_index:end_index][['timestamp', 'open', 'high', 'low', 'close']]
     df_candle['timestamp'] = pd.to_datetime(df_candle['timestamp'])
     df_candle.set_index('timestamp', inplace=True)
-    
-    output_ta = df_raw['output_ta'].values[start_index:end_index]
-
-    ha_candle = []
-    for ta in output_ta:
-        ha = eval(ta)["ha_candle"]
-        ha_candle.append(ha)
-
-    ha_candle = pd.DataFrame(ha_candle, columns=['Open', 'High', 'Low', 'Close'], index=df_candle.index)
-    ha_candle = ha_candle - 30
-    ha_candle.index = df_candle.index
     
     fig = plt.figure(figsize=(20, 12))
     gs = GridSpec(1, 2, width_ratios=[10, 1], figure=fig)
@@ -164,28 +153,28 @@ def plot_predict(df_raw, start_index, end_index, list_predict, list_ema_7, list_
         df_candle, type='candle', style='charles', ax = ax1,
         volume=False, ylabel='Price'
     )
-    mpf.plot(
-        ha_candle, type='candle', style='charles', ax=ax1,
-        volume=False, ylabel='Heikin-Ashi Close'
-    )
     ax1.set_title('Predict Price')
     ax1.set_ylabel('Price')
     
-    for index, confidence, predicted_class, candlestick_pattern, count_ha in list_predict:
-        candle_type = candlestick_pattern["candle_type"]
-        candle_pattern = candlestick_pattern["candle_pattern"]
-        next_trend = candlestick_pattern["next_trend"]
-        
+    for index, confidence, predicted_class, diff_ema_7_25, count_ha in list_predict:
         price = df_raw.iloc[index]['close']
-        color = 'green' if predicted_class == 1 else 'red'
+        if predicted_class == 1:
+            color = 'green'
+        elif predicted_class == 0:
+            color = 'red'
+        else:
+            color = 'blue'
         ax1.scatter([index-start_index], [price], color=color, s=100)
-        ax1.text(index-start_index, df_raw.iloc[index]['low']-2, f"{round(confidence, 2)}", fontsize=12, ha='center', va='center', color=color)
-        if candle_type in CANDLE_PATTERN or candle_type in CANDLE_DOUBLE or candle_type in CANDLE_TRIPPLE_PATTERN:
-            ax1.text(index-start_index, price, f"{candle_type}_{next_trend}", fontsize=10, color=color)
+        ax1.text(index-start_index, df_raw.iloc[index]['low']-2, f"{round(count_ha, 2)} _ {round(diff_ema_7_25, 2)}", fontsize=12, ha='center', va='center', color=color)
     time_stamp = df_raw.iloc[start_index]['timestamp'].replace('-', '').replace(':', '').replace(' ', '')
         
-    ax1.plot(list_ema_7, color='blue')
-    ax1.plot(list_ema_25, color='green')
+    ax1.plot(list_ema_7, color='pink')
+    ax1.plot(list_ema_25, color='purple')
+    # ax1.plot(list_ema_34, color='orange')
+    # ax1.plot(list_ema_89, color='blue')
+    ax1.plot(list_upperband, color='red')
+    ax1.plot(list_lowerband, color='green')
+    
     output_folder_image = f"output/date"
     os.makedirs(output_folder_image, exist_ok=True)
     output_image_path = os.path.join(
@@ -197,7 +186,7 @@ def plot_predict(df_raw, start_index, end_index, list_predict, list_ema_7, list_
     plt.clf()
     
 
-csv_path = r"indicator_data_xau_table_h1_2024_10.csv"
+csv_path = r"indicator_data_xau_table_h1_2022_0.005.csv"
 df_raw = pd.read_csv(csv_path)
 
 list_features = np.load('weights/list_features.npy', allow_pickle='TRUE')
@@ -208,15 +197,7 @@ scaler = np.load('weights/scaler.npy', allow_pickle='TRUE').item()
 # Load feat_indx
 feat_indx = np.load('weights/feat_idx.npy', allow_pickle='TRUE')
 
-# Load model
-params = {'batch_size': 80, 'conv2d_layers': {'conv2d_do_1': 0.2, 'conv2d_filters_1': 64, 'conv2d_kernel_size_1': 3, 'conv2d_mp_1': 0, 
-                                               'conv2d_strides_1': 1, 'kernel_regularizer_1': 0.0, 'conv2d_do_2': 0.3, 
-                                               'conv2d_filters_2': 64, 'conv2d_kernel_size_2': 3, 'conv2d_mp_2': 2, 'conv2d_strides_2': 1, 
-                                               'kernel_regularizer_2': 0.0, 'layers': 'two'}, 
-           'dense_layers': {'dense_do_1': 0.3, 'dense_nodes_1': 128, 'kernel_regularizer_1': 0.0, 'layers': 'one'},
-           'epochs': 300, 'lr': 0.001, 'optimizer': 'adam'}
-
-model = create_model_cnn(params)
+model = create_model_cnn()
 best_model_path = os.path.join('weights', 'best_model.h5') 
 # best_model_path = "model_epoch_160.h5"
 model = load_model(best_model_path)
@@ -240,7 +221,11 @@ start_date = None
 end_date = None
 list_ema_7 = []
 list_ema_25 = []
+list_ema_34 = []
+list_ema_89 = []
 list_predict_class = []
+list_upperband = []
+list_lowerband = []
 current_index = 0
 for index in tqdm.tqdm(range(len(df_raw))):
     if  index >= len(df_raw) - 100 or index < 100:
@@ -250,13 +235,25 @@ for index in tqdm.tqdm(range(len(df_raw))):
     input_data = scaler.transform(input_data.reshape(1, -1))
     input_data = input_data[:, feat_indx]
     candlestick_pattern = df_raw.iloc[index]['candlestick_pattern']
-    ema_7 = df_raw.iloc[index]['ema_34']
-    ema_25 = df_raw.iloc[index]['ema_89']
+    ema_7 = df_raw.iloc[index]['ema_7']
+    ema_25 = df_raw.iloc[index]['ema_25']
+    ema_34 = df_raw.iloc[index]['ema_34']
+    ema_89 = df_raw.iloc[index]['ema_89']
+    ema_50 = df_raw.iloc[index]['ema_50']
     list_ema_7.append(ema_7)
     list_ema_25.append(ema_25)
+    list_ema_34.append(ema_34)
+    list_ema_89.append(ema_89)
+    
+    current_price = df_raw.iloc[index]['close']
 
     ha_candle_status = df_raw.iloc[index]['streak_count']
     candle_type = df_raw.iloc[index]['ha_type']
+    
+    diff_ema_7_50 = df_raw.iloc[index]['ema_7'] - df_raw.iloc[index]['ema_25']
+    
+    count_ema_7 = df_raw.iloc[index]['count_ema_7_ema_25']
+    count_ema_34 = df_raw.iloc[index]['count_ema_34_ema_89']
  
     batch_x = input_data
     x_temp = np.reshape(batch_x, (5, 5))
@@ -270,23 +267,35 @@ for index in tqdm.tqdm(range(len(df_raw))):
     confidence = float(np.max(pred, axis=1)[0])
     
     current_date = pd.to_datetime(df_raw.iloc[index]['timestamp']).dayofyear
-    count_ema = df_raw.iloc[index]['rsi_14']
+    rsi = df_raw.iloc[index]['rsi_14']
+    upperband = df_raw.iloc[index]['upperband']
+    lowerband = df_raw.iloc[index]['lowerband']
+    signal = df_raw.iloc[index]['signals']
+    
+    list_upperband.append(upperband)
+    list_lowerband.append(lowerband)
+
     if start_date is None:
         start_date = current_date
         start_index = index
         
-    candlestick_pattern = eval(candlestick_pattern.replace('null', '2').replace('false', '0').replace('true', '1'))
+    # candlestick_pattern = eval(candlestick_pattern.replace('null', '2').replace('false', '0').replace('true', '1'))
+    diff_ema_7_25 = df_raw.iloc[index]['ema_7'] - df_raw.iloc[index]['ema_25']
+    
     if confidence < 0.7:
         predicted_class = 2
-    if predicted_class == 1 and count_ema > 40:
+    if predicted_class == 1 and rsi > 40:
         predicted_class = 2
-    if predicted_class == 0 and count_ema < 60:
+    if predicted_class == 0 and rsi < 60:
         predicted_class = 2
-    
+        
+    if count_ema_7 < 10 or abs(ema_7 - ema_25)/current_price < 3/2000:
+        predicted_class = 2
+        
     list_predict_class.append(predicted_class)
     list_predict_class = list_predict_class[-2:]
     if predicted_class in [0, 1]:
-            list_predict.append([index, confidence, predicted_class, candlestick_pattern, count_ema])
+            list_predict.append([index, confidence, predicted_class, diff_ema_7_25, count_ema_7])
             number_ha_candle, ha_status, status = plot_candlestick(df_raw, index, predicted_class, confidence)
             if "TP" in status:
                 count_tp += 1
@@ -301,13 +310,18 @@ for index in tqdm.tqdm(range(len(df_raw))):
     if current_date - start_date > 9:
         end_date = current_date
         end_index = index
-        plot_predict(df_raw, start_index, end_index, list_predict, list_ema_7, list_ema_25) 
+        plot_predict(df_raw, start_index, end_index, list_predict, list_ema_7, list_ema_25, list_ema_34, list_ema_89, list_upperband, list_lowerband) 
         list_predict = [] 
         list_ema_7 = []
         list_ema_25 = []
+        list_ema_34 = []
+        list_ema_89 = []
+        list_upperband = []
+        list_lowerband = []
         start_date = current_date
         start_index = index
         
         
 print(count_tp, count_sl, count_fail, count_equal)
-print(total_tp, total_sl)
+print("TP acc:", count_tp / (count_tp + count_sl) * 100)
+
