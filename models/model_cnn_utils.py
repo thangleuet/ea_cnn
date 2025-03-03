@@ -7,7 +7,7 @@ from keras import backend as K
 from keras.utils import get_custom_objects
 from models.metrics import f1_weighted, f1_metric
 
-def create_model_cnn(timesteps=5, num_features=5):
+def create_model_cnn(timesteps=7, num_features=7):
     model = Sequential()
     
     conv2d_layer1 = Conv2D(32,

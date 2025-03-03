@@ -39,7 +39,7 @@ def get_sample_weights(y):
     print("value_counts", np.unique(y, return_counts=True))
     sample_weights = y.copy().astype(float)
     for i in np.unique(y):
-        sample_weights[sample_weights == i] = class_weights[i] if i == 2 else 1.5 * class_weights[i]
+        sample_weights[sample_weights == i] = class_weights[i] if i == 2 else 0.8 * class_weights[i]
     return sample_weights
 
 def reshape_as_image(x, img_width, img_height):
@@ -52,16 +52,16 @@ def reshape_as_image(x, img_width, img_height):
 # use the path printed in above output cell after running stock_cnn.py. It's in below format
 csv_tain = [f for f in os.listdir('data') if f.endswith('.csv') and 'features' not in f]
 df_train = pd.concat([pd.read_csv(os.path.join('data', f)) for f in csv_tain])
-df_train.drop(columns=["output_ta"], inplace=True) 
+# df_train.drop(columns=["output_ta"], inplace=True) 
 
 df_train = df_train.dropna()
 df_train['labels'] = df_train['labels'].astype("int")
 
-df_train.drop(columns=["ha_open", "ha_high", "ha_low", "ha_close"], inplace=True)
+df_train.drop(columns=["ha_open", "ha_high", "ha_low", "ha_close", "ha_type"], inplace=True)
 # df_train.drop(columns=["ema_7","ema_14", "ema_17", "ema_21", "ema_25", "ema_34", "ema_89", "ema_50", "upperband", "lowerband"], inplace=True)
 
-df_test = pd.read_csv("test/indicator_data_xau_table_h1_2022_0.005.csv")
-df_test.drop(columns=["output_ta"], inplace=True) 
+df_test = pd.read_csv("test/indicator_data_xau_table_m15_2024_7.csv")
+# df_test.drop(columns=["output_ta"], inplace=True) 
 
 df_test = df_test.dropna()
 df_test['labels'] = df_test['labels'].astype("int")
@@ -95,7 +95,7 @@ np.save(os.path.join(folder_model_path, 'list_features.npy'), list_features)
 x_main = x_train.copy()
 print("Shape of x, y train/test {} {} {} {}".format(x_train.shape, y_train.shape, x_test.shape, y_test.shape))
 
-num_features = 25  # should be a perfect square
+num_features = 49  # should be a perfect square
 
 select_k_best = SelectKBest(f_classif, k=num_features)
 select_k_best.fit(x_main, y_train)
@@ -150,7 +150,7 @@ rlp = ReduceLROnPlateau(monitor='val_loss', factor=0.02, patience=20, verbose=1,
 mcp = ModelCheckpoint(best_model_path, monitor='val_f1_metric', verbose=1,
                       save_best_only=True, save_weights_only=False, mode='max', period=1)  # val_f1_metric
 
-history = model.fit(x_train, y_train, epochs=100, verbose=1,
+history = model.fit(x_train, y_train, epochs=200, verbose=1,
                             batch_size=128, shuffle=False,
                             validation_data=(x_test, y_test),
                              callbacks=[mcp, rlp]
@@ -168,7 +168,7 @@ plt.xlabel('Epoch')
 plt.legend(['train_loss', 'val_loss', 'f1', 'val_f1'], loc='upper left')
 plt.show()
 # save image
-plt.savefig(os.path.join(folder_model_path, 'model_loss.png'))
+# plt.savefig(os.path.join(folder_model_path, 'model_loss.png'))
 
 # Load model and evaluate
 model = load_model(best_model_path)

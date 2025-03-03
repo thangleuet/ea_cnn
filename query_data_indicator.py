@@ -20,8 +20,8 @@ DB_USER = "xttrade"
 DB_PASSWORD ="Xttrade1234$"
 DB_NAME = "XTTRADE"
 
-START_TIME_M15 = "2019-01-01 00:00:00"
-END_TIME_M15 = "2022-01-01 00:00:00"
+START_TIME_M15 = "2024-01-01 00:00:00"
+END_TIME_M15 = "2024-10-10 00:00:00"
 
 CANDLE_PATTERN = [1, 2, 3, 4, 6, 7, 8, 9]
 CANDLE_DOUBLE = [10, 11, 12, 13, 14, 15]
@@ -35,7 +35,7 @@ class EAData:
         # Create a MySQL database connection with pymysql
         self.db_url = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}"
         self.engine = create_engine(self.db_url, echo=False)
-        self.timeframe = "table_h1"
+        self.timeframe = "table_m15"
 
     def get_data(self) -> str:
         """Get data from database
@@ -44,7 +44,7 @@ class EAData:
             string: str: SQL Query
         """
         logger.info(f"Database URL: {self.db_url}")
-        sql_query = f"SELECT id, Open, High, Low, Close, indicator_data, output_ta, candlestick_pattern FROM {self.database} WHERE date_time BETWEEN '{self.start_time}'  AND '{self.end_time}' order by date_time"
+        sql_query = f"SELECT id, Open, High, Low, Close, indicator_data FROM {self.database} WHERE date_time BETWEEN '{self.start_time}'  AND '{self.end_time}' order by date_time"
         logger.info(f"SQL Query: {sql_query}")
         return sql_query
     
@@ -76,7 +76,7 @@ class EAData:
         sql_query = self.get_data()
         df_pd = pd.read_sql(sql_query, con=self.engine)
         window_size = 11
-        price = 0.005
+        price = 7
         df_pd["labels"] = 2
         # save to csv
         for index, row in tqdm.tqdm(df_pd.iterrows()):
@@ -97,9 +97,8 @@ class EAData:
                 low_values_after = []
                 current_price = df_pd.loc[window_middle, 'close']
                 diff_ema_34_89 = df_pd.loc[window_middle, 'ema_34'] - df_pd.loc[window_middle, 'ema_89']
-                macd = df_pd.loc[index, "macd"]
-                macd_signal = df_pd.loc[index, "macd_signal"]
                 rsi = df_pd.loc[window_middle, 'rsi_14']
+                count_ema = df_pd.loc[window_middle, 'count_ema_34_ema_89']
 
                 # Lấy giá trị cao/thấp từ từng chỉ báo trong cửa sổ
                 for indicator in indicator_window:
@@ -139,24 +138,38 @@ class EAData:
                     min_index_after, min_after = self.find_first_greater(low_values_after, min_value, False)
                     max_after = max(high_values_after[:min_index_after])
                     
-                if max_index == window_middle and (current_price - min_after)/current_price >= price:
-                    if diff_ema_34_89/df_pd.loc[window_middle, 'ema_89'] < -3/2000 and rsi > 60:
-                        df_pd.loc[window_middle, 'labels'] = 0  # SELL
-                    for i in range(1, 3):
-                        diff_ema_34_89_after = df_pd.loc[window_middle+i, 'ema_34'] - df_pd.loc[window_middle+i, 'ema_89']
-                        rsi_after = df_pd.loc[window_middle+i, 'rsi_14']
-                        if current_price - df_pd.loc[window_middle+i, 'close'] < 2 and (df_pd.loc[window_middle+i, 'close'] - min_after)/df_pd.loc[window_middle+i, 'close'] >= price and diff_ema_34_89_after/df_pd.loc[window_middle+i, 'ema_89'] < -3/2000 and rsi_after > 60:
-                            df_pd.loc[window_middle+i, 'labels'] = 0
-                
-                elif min_index == window_middle and (max_after - current_price)/current_price >= price:
-                    if diff_ema_34_89/df_pd.loc[window_middle, 'ema_34'] > 3/2000 and rsi < 50:
-                        df_pd.loc[window_middle, 'labels'] = 1 # BUY
-                    for i in range(1, 3):
-                        diff_ema_34_89_after = df_pd.loc[window_middle+i, 'ema_34'] - df_pd.loc[window_middle+i, 'ema_89']
-                        rsi_after = df_pd.loc[window_middle+i, 'rsi_14']
-                        if df_pd.loc[window_middle + i, 'close'] - current_price < 2 and (max_after - df_pd.loc[window_middle + i, 'close'])/df_pd.loc[window_middle+i, 'close'] >= price and diff_ema_34_89_after/df_pd.loc[window_middle+i, 'ema_34'] > 3/2000 and rsi_after < 40:
-                            df_pd.loc[window_middle+i, 'labels'] = 1 
-                    
+                if max_index == window_middle and (current_price - min_after) >= price:
+                    if rsi > 60:
+                        if diff_ema_34_89 < 0:
+                            df_pd.loc[window_middle, 'labels'] = 0  # SELL 
+                        elif (diff_ema_34_89 > 0 and (current_price - min_after) >= 10) and df_pd.loc[window_middle, 'status_reverse'] == 1:
+                            df_pd.loc[window_middle, 'labels'] = 0  # BUY
+                        for i in range(1, 4):
+                            diff_ema_34_89_after = (df_pd.loc[window_middle+i, 'ema_34'] - df_pd.loc[window_middle+i, 'ema_89'])
+                            rsi_after = df_pd.loc[window_middle+i, 'rsi_14']
+                            count_ema_after = df_pd.loc[window_middle+i, 'count_ema_34_ema_89']
+                            if (current_price - df_pd.loc[window_middle+i, 'close']) < 2 and (df_pd.loc[window_middle+i, 'close'] - min_after) >= price:
+                                if rsi_after > 60:
+                                    if diff_ema_34_89_after < 0:
+                                        df_pd.loc[window_middle+i, 'labels'] = 0  # SELL
+                                    elif (diff_ema_34_89_after > 0 and (df_pd.loc[window_middle+i, 'close'] - min_after) >= 10) and df_pd.loc[window_middle+i, 'status_reverse'] == 1:
+                                        df_pd.loc[window_middle+i, 'labels'] = 0 # BUY
+                elif min_index == window_middle and (max_after - current_price) >= price:
+                    if rsi < 40:
+                        if diff_ema_34_89 > 0:
+                            df_pd.loc[window_middle, 'labels'] = 1 # BUY
+                        elif (diff_ema_34_89 < 0 and (max_after - current_price) >= 10) and df_pd.loc[window_middle, 'status_reverse'] == 1:
+                            df_pd.loc[window_middle, 'labels'] = 1 # SELL
+                        for i in range(1, 4):
+                            diff_ema_34_89_after = (df_pd.loc[window_middle+i, 'ema_34'] - df_pd.loc[window_middle+i, 'ema_89'])
+                            rsi_after = df_pd.loc[window_middle+i, 'rsi_14']
+                            count_ema_after = df_pd.loc[window_middle+i, 'count_ema_34_ema_89']
+                            if (df_pd.loc[window_middle + i, 'close'] - current_price) < 2 and (max_after - df_pd.loc[window_middle + i, 'close']) >= price:
+                                if rsi_after < 40:
+                                    if diff_ema_34_89_after > 0:
+                                        df_pd.loc[window_middle+i, 'labels'] = 1 # BUY
+                                    elif (diff_ema_34_89_after < 0 and (max_after - df_pd.loc[window_middle + i, 'close']) >= 10) and df_pd.loc[window_middle+i, 'status_reverse'] == 1:
+                                        df_pd.loc[window_middle+i, 'labels'] = 1 # SELL
                 # count label
                 print(df_pd["labels"].value_counts())    
         # remove column indicator_data
@@ -164,10 +177,9 @@ class EAData:
         df_pd.drop(columns=["id"], inplace=True)
         df_pd.to_csv(f"indicator_data_xau_{self.timeframe}_{START_TIME_M15.split('-')[0]}_{price}.csv", index=False)
             
-
 if __name__ == "__main__":
         chart_pattern = EAData(
-            database="exness_xau_usd_h1",
+            database="exness_xau_usd_m15",
             start_time=START_TIME_M15,
             end_time=END_TIME_M15,
         )

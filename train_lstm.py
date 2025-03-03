@@ -19,6 +19,9 @@ from matplotlib import pyplot as plt
 from keras.optimizers import Adam
 from keras.utils import get_custom_objects
 from models.metrics import f1_weighted, f1_metric
+import torch
+from torch.utils.data import Dataset, DataLoader
+
 get_custom_objects().update({"f1_metric": f1_metric, "f1_weighted": f1_weighted})
 
 def create_sequences(x, timestep):
@@ -54,9 +57,9 @@ df_train.drop(columns=["output_ta"], inplace=True)
 df_train = df_train.dropna()
 df_train['labels'] = df_train['labels'].astype("int")
 
-df_train.drop(columns=["ema_7","ema_14", "ema_17", "ema_21", "ema_25", "ema_34", "ema_89", "ema_50", "ha_open", "ha_high", "ha_low", "ha_close"], inplace=True)
+df_train.drop(columns=["ha_open", "ha_high", "ha_low", "ha_close", "ha_type"], inplace=True)
 
-df_test = pd.read_csv("test/indicator_data_xau_table_h1_2024_0.005.csv")
+df_test = pd.read_csv("test/indicator_data_xau_table_h1_2024_7.csv")
 df_test.drop(columns=["output_ta"], inplace=True) 
 
 df_test = df_test.dropna()
@@ -87,140 +90,118 @@ np.save(os.path.join(folder_model_path, 'scaler.npy'), mm_scaler)
 # Save list_features
 np.save(os.path.join(folder_model_path, 'list_features.npy'), list_features)
 
-x_main = x_train.copy()
-print("Shape of x, y train/test {} {} {} {}".format(x_train.shape, y_train.shape, x_test.shape, y_test.shape))
+window_size = 11
+X_seq_train, y_seq_train = [], []
+for i in range(len(x_train) - window_size + 1):
+    X_seq_train.append(x_train[i:i + window_size])
+    y_seq_train.append(y_train[i + window_size - 1])  # Nhãn của điểm cuối cửa sổ
 
-num_features = 25  # should be a perfect square
+X_seq_train = np.array(X_seq_train)
+y_seq_train = np.array(y_seq_train)
 
-select_k_best = SelectKBest(f_classif, k=num_features)
-select_k_best.fit(x_main, y_train)
-selected_features_anova = itemgetter(*select_k_best.get_support(indices=True))(list_features)
-print("****************************************")
+X_seq_test, y_seq_test = [], []
+for i in range(len(x_test) - window_size + 1):
+    X_seq_test.append(x_test[i:i + window_size])
+    y_seq_test.append(y_test[i + window_size - 1])  # Nhãn của điểm cuối cửa sổ
 
-if len(selected_features_anova) < num_features:
-    raise Exception('number of common features found {} < {} required features. Increase "topk variable"'.format(len(selected_features_anova), num_features))
-feat_idx = []
-for c in selected_features_anova:
-    feat_idx.append(list_features.index(c))
-feat_idx = sorted(feat_idx[0:num_features])
+X_seq_test = np.array(X_seq_test)
+y_seq_test = np.array(y_seq_test)
 
-# Save feat_idx
-np.save(os.path.join(folder_model_path, 'feat_idx.npy'), feat_idx)
+# Tính trọng số class
+class_weights = compute_class_weight('balanced', classes=[0, 1, 2], y=y_train)
+class_weights_tensor = torch.tensor(class_weights, dtype=torch.float)
 
-x_train = x_train[:, feat_idx]
-x_test = x_test[:, feat_idx]
-name_features = x_train[0]
+class TimeSeriesDataset(Dataset):
+    def __init__(self, X, y):
+        self.X = torch.tensor(X, dtype=torch.float32)
+        self.y = torch.tensor(y, dtype=torch.long)
 
-# LSTM
-timestep = 48
-lstm_features = ['close', 'open', 'high', 'low', 'volume']
-x_train_lstm = create_sequences(df_train[lstm_features].values, timestep)[100:]
-x_train = x_train[timestep:]
-y_train = y_train[timestep:]
+    def __len__(self):
+        return len(self.X)
 
-x_test_lstm = create_sequences(df_test[lstm_features].values, timestep)[100:]
-x_test = x_test[timestep:]
-y_test = y_test[timestep:]
+    def __getitem__(self, idx):
+        return self.X[idx], self.y[idx]
 
-lstm_scaler = StandardScaler()
-x_train_lstm = lstm_scaler.fit_transform(x_train_lstm.reshape(-1, len(lstm_features))).reshape(-1, timestep, len(lstm_features))
-x_test_lstm = lstm_scaler.transform(x_test_lstm.reshape(-1, len(lstm_features))).reshape(-1, timestep, len(lstm_features))
-# save scaler
-np.save(os.path.join(folder_model_path, 'lstm_scaler.npy'), lstm_scaler)
+train_dataset = TimeSeriesDataset(X_seq_train, y_seq_train)
+test_dataset = TimeSeriesDataset(X_seq_test, y_seq_test)
 
-_labels, _counts = np.unique(y_train, return_counts=True)
-print("percentage of class 0 = {}, class 1 = {}".format(_counts[0]/len(y_train) * 100, _counts[1]/len(y_train) * 100))
+train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
-sample_weights = get_sample_weights(y_train)
+import torch.nn as nn
 
-one_hot_enc = OneHotEncoder(sparse_output=False, categories='auto')  # , categories='auto'
-y_train = one_hot_enc.fit_transform(y_train.reshape(-1, 1))
-y_test = one_hot_enc.transform(y_test.reshape(-1, 1))
+class TransformerClassifier(nn.Module):
+    def __init__(self, input_dim, d_model, n_heads, n_layers, dropout=0.1):
+        super(TransformerClassifier, self).__init__()
+        self.input_dim = input_dim
+        self.d_model = d_model
 
-print("final shape of x, y train/test {} {} {} {}".format(x_train.shape, y_train.shape, x_test.shape, y_test.shape))
+        # Layer để chuyển đổi đầu vào sang d_model
+        self.input_linear = nn.Linear(input_dim, d_model)
+        
+        # Transformer Encoder
+        encoder_layer = nn.TransformerEncoderLayer(d_model=d_model, nhead=n_heads, dropout=dropout)
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=n_layers)
+        
+        # Đầu ra phân loại
+        self.fc = nn.Linear(d_model, 3)  # 3 class: 0, 1, 2
 
-def check_baseline(pred, y_test):
-    print("size of test set", len(y_test))
-    e = np.equal(pred, y_test)
-    print("TP class counts", np.unique(y_test[e], return_counts=True))
-    print("True class counts", np.unique(y_test, return_counts=True))
-    print("Pred class counts", np.unique(pred, return_counts=True))
-    holds = np.unique(y_test, return_counts=True)[1][2]  # number 'hold' predictions
-    print("baseline acc:", (holds/len(y_test)*100))
+    def forward(self, x):
+        # x shape: (batch_size, window_size, input_dim)
+        x = self.input_linear(x)  # (batch_size, window_size, d_model)
+        x = x.permute(1, 0, 2)    # (window_size, batch_size, d_model) cho Transformer
+        x = self.transformer_encoder(x)
+        x = x[-1, :, :]           # Lấy output của timestep cuối (batch_size, d_model)
+        x = self.fc(x)            # (batch_size, 3)
+        return x
+    
+# Khởi tạo mô hình
+input_dim = x_train.shape[1]
+d_model = 64              # Kích thước embedding
+n_heads = 4               # Số đầu chú ý
+n_layers = 2              # Số layer Transformer
+model = TransformerClassifier(input_dim, d_model, n_heads, n_layers)
 
-attention_input = tf.keras.layers.Input(shape=(len(name_features),), name='Attention_Input')
-attention = tf.keras.layers.Reshape((1, len(name_features)))(attention_input)  # Reshape for attention
-x_attention = tf.keras.layers.MultiHeadAttention(num_heads=8, key_dim=16)(attention, attention)
-x_attention = tf.keras.layers.GlobalAveragePooling1D()(x_attention)
-x_attention = tf.keras.layers.Dropout(0.3)(x_attention)
-x_attention = tf.keras.layers.BatchNormalization()(x_attention)
+from torch.optim import Adam
+from sklearn.metrics import f1_score
 
-# Combine LSTM and Attention outputs
-x = tf.keras.layers.Dense(16, activation='relu')(x_attention)
-x = tf.keras.layers.Dropout(0.3)(x)
-output = tf.keras.layers.Dense(3, activation='softmax', name='Output')(x)
+# Thiết lập thiết bị
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+model = model.to(device)
+class_weights_tensor = class_weights_tensor.to(device)
 
-# Tạo model
-model = tf.keras.Model(inputs=attention_input, outputs=output)
-model.compile(optimizer=Adam(learning_rate=0.001), loss='categorical_crossentropy', metrics=['accuracy', f1_metric])
+# Loss và optimizer
+criterion = nn.CrossEntropyLoss(weight=class_weights_tensor)
+optimizer = Adam(model.parameters(), lr=0.001)
 
-best_model_path = os.path.join(folder_model_path, 'best_model.h5')
+# Huấn luyện
+n_epochs = 100
+for epoch in range(n_epochs):
+    model.train()
+    total_loss = 0
+    for X_batch, y_batch in train_loader:
+        X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+        
+        optimizer.zero_grad()
+        outputs = model(X_batch)
+        loss = criterion(outputs, y_batch)
+        loss.backward()
+        optimizer.step()
+        
+        total_loss += loss.item()
+    
+    print(f'Epoch {epoch+1}/{n_epochs}, Loss: {total_loss/len(train_loader):.4f}')
 
-rlp = ReduceLROnPlateau(monitor='val_loss', factor=0.02, patience=20, verbose=1, mode='min',
-                        min_delta=0.001, cooldown=1, min_lr=0.001)
-mcp = ModelCheckpoint(best_model_path, monitor='val_f1_metric', verbose=1,
-                      save_best_only=True, save_weights_only=False, mode='max', period=1)  # val_f1_metric
+# Đánh giá
+model.eval()
+y_true, y_pred = [], []
+with torch.no_grad():
+    for X_batch, y_batch in test_loader:
+        X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+        outputs = model(X_batch)
+        _, predicted = torch.max(outputs, 1)
+        y_true.extend(y_batch.cpu().numpy())
+        y_pred.extend(predicted.cpu().numpy())
 
-history = model.fit(x_train, y_train, epochs=100, verbose=1,
-                            batch_size=128, shuffle=False,
-                            validation_data= (x_test, y_test),
-                             callbacks=[mcp, rlp]
-                            , sample_weight=sample_weights)
-
-plt.figure()
-plt.plot(history.history['loss'])
-plt.plot(history.history['val_loss'])
-plt.plot(history.history['f1_metric'])
-plt.plot(history.history['val_f1_metric'])
-
-plt.title('Model loss')
-plt.ylabel('Loss')
-plt.xlabel('Epoch')
-plt.legend(['train_loss', 'val_loss', 'f1', 'val_f1'], loc='upper left')
-plt.show()
-# save image
-plt.savefig(os.path.join(folder_model_path, 'model_loss.png'))
-
-# Predict and filter by confidence > 0.9
-pred = model.predict(x_test)
-pred_probs = np.max(pred, axis=1)  # Max probability for each prediction
-confident_mask = pred_probs > 0.7   # Filter predictions with confidence > 0.9
-
-# Get predicted and true classes with confidence > 0.9
-pred_classes = np.argmax(pred, axis=1)[confident_mask]
-y_test_classes = np.argmax(y_test, axis=1)[confident_mask]
-
-print(f"Number of confident predictions: {len(pred_classes)}")
-
-# Baseline check and metrics
-# check_baseline(pred_classes, y_test_classes)
-conf_mat = confusion_matrix(y_test_classes, pred_classes)
-print(conf_mat)
-
-# F1 scores
-print("F1 score (weighted):", f1_score(y_test_classes, pred_classes, average='weighted'))
-print("F1 score (macro):", f1_score(y_test_classes, pred_classes, average='macro'))
-print("F1 score (micro):", f1_score(y_test_classes, pred_classes, average='micro'))
-
-# Cohen's Kappa
-print("Cohen's Kappa:", cohen_kappa_score(y_test_classes, pred_classes))
-
-# Recall per class
-recall = []
-for i, row in enumerate(conf_mat):
-    recall_value = np.round(row[i] / np.sum(row), 2) if np.sum(row) > 0 else 0.0
-    recall.append(recall_value)
-    print(f"Recall of class {i} = {recall_value}")
-
-print("Recall avg =", sum(recall) / len(recall))
-
+f1 = f1_score(y_true, y_pred, average='weighted')
+print(f'F1-Score: {f1:.4f}')
