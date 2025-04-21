@@ -28,17 +28,6 @@ def plot_candlestick(df_raw, index, predicted_class, confidence):
     df_candle.set_index('timestamp', inplace=True)   
     
     labels = df_raw.iloc[index]['labels']
-    
-    # output_ta = df_raw['output_ta'].values[index-100:index+100]
-
-    # ha_candle = []
-    # for ta in output_ta:
-    #     ha = eval(ta)["ha_candle"]
-    #     ha_candle.append(ha)
-
-    # ha_candle = pd.DataFrame(ha_candle, columns=['Open', 'High', 'Low', 'Close'], index=df_candle.index)
-    # ha_candle = ha_candle - 50
-    # ha_candle.index = df_candle.index
 
     # Define scatter plot data aligned with timestamps
     marker = '^' if predicted_class == 1 else 'v'
@@ -48,9 +37,6 @@ def plot_candlestick(df_raw, index, predicted_class, confidence):
     # Initialize scatter data with NaNs
     scatter_data = np.full(len(df_candle), np.nan)
     scatter_data[100] = df_candle['close'].iloc[100]  # Target point for the scatter plot
-
-    # ha_scatter = np.full(len(ha_candle), np.nan)
-    # ha_scatter[100] = ha_candle['Close'].iloc[100]  # Adjusted point in ha_candle for visibility
 
     # First subplot for candlestick plot with scatter_data
 
@@ -111,32 +97,20 @@ def plot_candlestick(df_raw, index, predicted_class, confidence):
                     break  # Nếu đã chạm TP thì không cần kiểm tra nữa
         count += 1   
 
-    # main_trend_start, main_trend_en
-    # ha_scatter_plot = mpf.make_addplot(
-    #     ha_scatter, type='scatter', markersize=100, marker=marker, color=color, label=f"{label} HA", ax=ax1
-    # )
     ax2.text(0.5, 0.5, f"Status: {status}", fontsize=15, ha='center', va='center')
     ax2.text(0.5, 0.4, f"Confidence: {confidence}", fontsize=15, ha='center', va='center')
     ax2.text(0.5, 0.3, f"Label: {labels}", fontsize=15, ha='center', va='center')
-    # mpf.plot(
-    #     ha_candle, type='candle', style='charles', ax=ax1,
-    #     addplot=[ha_scatter_plot],  # Correctly associate this addplot with ax1
-    #     volume=False, ylabel='Heikin-Ashi Close'
-    # )
     
     output_folder_image = f"output/buy/{status}" if predicted_class == 1 else f"output/sell/{status}"
     os.makedirs(output_folder_image, exist_ok=True)
     output_image_path = os.path.join(
         output_folder_image, f"{time_stamp}_{index}_{round(confidence, 2)}.png"
     )
-
-    # Save the figure
-    # plt.savefig(output_image_path)
     plt.clf()
 
     return number_ha_candle, ha_status, status
 
-def plot_predict(df_raw, start_index, end_index, list_predict, list_ema_7, list_ema_25, list_ema_34, list_ema_89, list_upperband, list_lowerband):
+def plot_predict(df_raw, start_index, end_index, list_predict, list_ema_7, list_ema_25, list_ema_34, list_ema_89, list_ema_200, list_upperband, list_lowerband):
     df_candle = df_raw.iloc[start_index:end_index][['timestamp', 'open', 'high', 'low', 'close']]
     df_candle['timestamp'] = pd.to_datetime(df_candle['timestamp'])
     df_candle.set_index('timestamp', inplace=True)
@@ -156,7 +130,7 @@ def plot_predict(df_raw, start_index, end_index, list_predict, list_ema_7, list_
     ax1.set_title('Predict Price')
     ax1.set_ylabel('Price')
     
-    for index, confidence, predicted_class, count_ha, status in list_predict:
+    for index, confidence, predicted_class, count_ha, status, adx_14 in list_predict:
         price = df_raw.iloc[index]['close']
         if predicted_class == 1:
             color = 'green'
@@ -165,15 +139,12 @@ def plot_predict(df_raw, start_index, end_index, list_predict, list_ema_7, list_
         else:
             color = 'blue'
         ax1.scatter([index-start_index], [price], color=color, s=100)
-        ax1.text(index-start_index, df_raw.iloc[index]['low'], f"{round(count_ha, 2)} _ {status}", fontsize=12, ha='center', va='center', color=color)
+        ax1.text(index-start_index, df_raw.iloc[index]['low'], f"{status}", fontsize=12, ha='center', va='center', color=color)
     time_stamp = df_raw.iloc[start_index]['timestamp'].replace('-', '').replace(':', '').replace(' ', '')
         
-    # ax1.plot(list_ema_7, color='pink')
-    # ax1.plot(list_ema_25, color='purple')
     ax1.plot(list_ema_34, color='orange')
     ax1.plot(list_ema_89, color='blue')
-    # ax1.plot(list_upperband, color='red')
-    # ax1.plot(list_lowerband, color='green')
+    # ax1.plot(list_ema_200, color='brown')
     
     output_folder_image = f"output/date"
     os.makedirs(output_folder_image, exist_ok=True)
@@ -186,7 +157,7 @@ def plot_predict(df_raw, start_index, end_index, list_predict, list_ema_7, list_
     plt.clf()
     
 
-csv_path = r"indicator_data_xau_table_m15_2024_7.csv"
+csv_path = r"test/indicator_data_xau_table_m15_2024_10.csv"
 df_raw = pd.read_csv(csv_path)
 
 list_features = np.load('weights/list_features.npy', allow_pickle='TRUE')
@@ -226,6 +197,7 @@ list_ema_7 = []
 list_ema_25 = []
 list_ema_34 = []
 list_ema_89 = []
+list_ema_200 = []
 list_predict_class = []
 list_upperband = []
 list_lowerband = []
@@ -241,19 +213,20 @@ for index in tqdm.tqdm(range(len(df_raw))):
     ema_25 = df_raw.iloc[index]['ema_25']
     ema_34 = df_raw.iloc[index]['ema_34']
     ema_89 = df_raw.iloc[index]['ema_89']
+    ema_200 = df_raw.iloc[index]['ema_200']
     list_ema_7.append(ema_7)
     list_ema_25.append(ema_25)
     list_ema_34.append(ema_34)
     list_ema_89.append(ema_89)
+    list_ema_200.append(ema_200)
     
     current_price = df_raw.iloc[index]['close']
-
-    ha_candle_status = df_raw.iloc[index]['streak_count']
-    candle_type = df_raw.iloc[index]['ha_type']
+    adx_14 = df_raw.iloc[index]['adx_14']
     
-    diff_ema_7_50 = df_raw.iloc[index]['ema_7'] - df_raw.iloc[index]['ema_25']
+    diff_ema_34_89 = df_raw.iloc[index]['ema_34'] - df_raw.iloc[index]['ema_89']
     
-    # count_ema_34 = df_raw.iloc[index]['count_ema_34_ema_89']
+    count_ema_34 = df_raw.iloc[index]['count_ema_34_ema_89']
+    # diff_ema34_89_m5 = df_raw.iloc[index]['diff_ema34_89_m5']
     
     current_time = df_raw.iloc[index]['timestamp']
     if current_time == "2023-03-23 01:00:00":
@@ -268,12 +241,7 @@ for index in tqdm.tqdm(range(len(df_raw))):
     
     current_date = pd.to_datetime(df_raw.iloc[index]['timestamp']).dayofyear
     rsi = df_raw.iloc[index]['rsi_14']
-    upperband = df_raw.iloc[index]['upperband']
-    lowerband = df_raw.iloc[index]['lowerband']
-    # signal = df_raw.iloc[index]['signals']
-    
-    list_upperband.append(upperband)
-    list_lowerband.append(lowerband)
+    # signal = df_raw.iloc[index]
 
     if start_date is None:
         start_date = current_date
@@ -282,10 +250,6 @@ for index in tqdm.tqdm(range(len(df_raw))):
     diff_ema_7_25 = df_raw.iloc[index]['ema_7'] - df_raw.iloc[index]['ema_25']
     
     if confidence < 0.7:
-        predicted_class = 2
-    if predicted_class == 1 and (rsi > 40):
-        predicted_class = 2
-    if predicted_class == 0 and (rsi < 60):
         predicted_class = 2
         
     if predicted_class == 1:
@@ -296,9 +260,28 @@ for index in tqdm.tqdm(range(len(df_raw))):
     list_predict_class.append(predicted_class)
     list_predict_class = list_predict_class[-2:]
     # if all(x in [0, 1] for x in list_predict_class) and  abs(df_raw.iloc[index]['close'] - df_raw.iloc[index]['open']) < 2 or (list_predict_class[0]== 0 and list_predict_class[1]== 2 and df_raw.iloc[index]['close'] - df_raw.iloc[index]['open'] > 2) or (list_predict_class[0]== 1 and list_predict_class[1]== 2 and df_raw.iloc[index]['open'] - df_raw.iloc[index]['close'] < 2):
-    if predicted_class in [0, 1]:
+    #     if 1 in list_predict_class:
+    #         predicted_class = 1
+    #     elif 0 in list_predict_class:
+    #         predicted_class = 0
+    # if diff_ema_34_89 < 0:
+    #     if len(list_predict_class) > 1 and list_predict_class[-1] == 2 and list_predict_class[-2] == 1 and df_raw.iloc[index]['close'] - df_raw.iloc[index]['open'] < 2:
+    #         predicted_class = 1
+    #     elif predicted_class == 0:
+    #         predicted_class = 0
+    #     else:
+    #         predicted_class = 2
+    # elif diff_ema_34_89 > 0:
+    #     if len(list_predict_class) > 1 and list_predict_class[-1] == 2 and list_predict_class[-2] == 0 and df_raw.iloc[index]['close'] - df_raw.iloc[index]['open'] > 2:
+    #         predicted_class = 0
+    #     elif predicted_class == 1:
+    #         predicted_class = 1
+    #     else:
+    #         predicted_class = 2
+            
+    if predicted_class in [0,1]:
         number_ha_candle, ha_status, status = plot_candlestick(df_raw, index, predicted_class, confidence)
-        list_features_output.append([index, confidence, predicted_class, predicted_class, status])
+        list_features_output.append([index, confidence, predicted_class, predicted_class, status, adx_14])
         if "TP" in status:
             count_tp += 1
         elif "SL" in status:
@@ -309,15 +292,16 @@ for index in tqdm.tqdm(range(len(df_raw))):
         print(f"TP: {count_tp} SL: {count_sl}")
     current_index = index
     
-    if current_date - start_date > 2:
+    if current_date - start_date > 5:
         end_date = current_date
         end_index = index
-        plot_predict(df_raw, start_index, end_index, list_features_output, list_ema_7, list_ema_25, list_ema_34, list_ema_89, list_upperband, list_lowerband) 
+        plot_predict(df_raw, start_index, end_index, list_features_output, list_ema_7, list_ema_25, list_ema_34, list_ema_89, list_ema_200, list_upperband, list_lowerband) 
         list_features_output = [] 
         list_ema_7 = []
         list_ema_25 = []
         list_ema_34 = []
         list_ema_89 = []
+        list_ema_200 = []
         list_upperband = []
         list_lowerband = []
         start_date = current_date

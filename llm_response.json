@@ -1,0 +1,25 @@
+{
+    "id": "gen-1744103449-KWdDYZI1IcBBBHhSOP8v",
+    "provider": "Chutes",
+    "model": "google/gemma-3-12b-it",
+    "object": "chat.completion",
+    "created": 1744103449,
+    "choices": [
+        {
+            "logprobs": null,
+            "finish_reason": "stop",
+            "native_finish_reason": "stop",
+            "index": 0,
+            "message": {
+                "role": "assistant",
+                "content": "```json\n{\n  \"current_price\": 2619.609,\n  \"timeframe\": \"5m\",\n  \"support_resistance\": [\n    {\n      \"type\": \"support\",\n      \"value\": 2614.521,\n      \"time\": \"2024-10-08 17:35:00\",\n      \"strength\": 2\n    },\n    {\n      \"type\": \"resistance\",\n      \"value\": 2623.654,\n      \"time\": \"2024-10-08 19:55:00\",\n      \"strength\": 1\n    }\n  ],\n  \"trend\": \"bullish\",\n  \"candle_pattern\": {\n    \"name\": \"none\",\n    \"direction\": \"none\",\n    \"time\": null\n  },\n  \"momentum\": \"moderate\",\n  \"rejection_zones\": [\n    {\n      \"type\": \"upper\",\n      \"value\": 2623.654,\n      \"time\": \"2024-10-08 19:55:00\"\n    }\n  ],\n  \"volume_confirmation\": false,\n  \"price_velocity\": 0.22,\n  \"entry_price\": null,\n  \"TP\": null,\n  \"SL\": null,\n  \"chart_pattern\": \"none\"\n}\n```",
+                "refusal": null
+            }
+        }
+    ],
+    "usage": {
+        "prompt_tokens": 9427,
+        "completion_tokens": 343,
+        "total_tokens": 9770
+    }
+}

@@ -15,19 +15,13 @@ CANDLE_DOUBLE = {"Bullish Engulfing": 10, "Bearish Engulfing": 11, "Piercing": 1
 CANDLE_TRIPPLE_PATTERN = {"Morning Star": 16, "Evening Star": 17, "Three Outside Up": 18, 
                   "Three Outside Down": 19, "Three Inside Up": 20, "Three Inside Down": 21}
 
-def plot_predict(df_raw, start_index, end_index, list_predict):
-    df_candle = df_raw.iloc[start_index:end_index][['timestamp', 'open', 'high', 'low', 'close']]
+def plot_candlestick_predict(df_raw, index, label):
+    start_index = max(0, index - 100)
+    index_db_len = df_raw.index[len(df_raw)-1]
+    end_index = min(index_db_len, index + 100)
+    df_candle = df_raw.loc[start_index:end_index][['timestamp', 'open', 'high', 'low', 'close']]
     df_candle['timestamp'] = pd.to_datetime(df_candle['timestamp'])
     df_candle.set_index('timestamp', inplace=True)
-
-    # ha_candle = []
-    # for ta in output_ta:
-    #     ha = eval(ta)["ha_candle"]
-    #     ha_candle.append(ha)
-
-    # ha_candle = pd.DataFrame(ha_candle, columns=['Open', 'High', 'Low', 'Close'], index=df_candle.index)
-    # ha_candle = ha_candle - 30
-    # ha_candle.index = df_candle.index
     
     fig = plt.figure(figsize=(20, 12))
     gs = GridSpec(1, 2, width_ratios=[10, 1], figure=fig)
@@ -41,18 +35,55 @@ def plot_predict(df_raw, start_index, end_index, list_predict):
         df_candle, type='candle', style='charles', ax = ax1,
         volume=False, ylabel='Price'
     )
-    # mpf.plot(
-    #     ha_candle, type='candle', style='charles', ax=ax1,
-    #     volume=False, ylabel='Heikin-Ashi Close'
-    # )
+    ax1.set_title('Predict Price')
+    ax1.set_ylabel('Price')
+    
+    ema34_data = df_raw.loc[start_index:end_index]['ema_34'].values
+    ema89_data = df_raw.loc[start_index:end_index]['ema_89'].values
+    price = df_raw.loc[index]['close']
+    
+    ax1.plot(ema34_data, label='EMA 34', color='orange', linewidth=1.5)
+    ax1.plot(ema89_data, label='EMA 89', color='purple', linewidth=1.5)
+    
+    color = 'green' if label == 1 else 'red'
+    if label in [0, 1]:
+        ax1.scatter([index-start_index], [price], color=color, s=100)
+    
+    time_stamp = df_raw.loc[start_index]['timestamp'].replace('-', '').replace(':', '').replace(' ', '')
+    output_folder_image = f"output_label"
+    os.makedirs(output_folder_image, exist_ok=True)
+    output_image_path = os.path.join(
+        output_folder_image, f"{index}_{time_stamp}.png"
+    )
+
+    # Save the figure
+    plt.savefig(output_image_path)
+    plt.clf()
+    
+
+def plot_candlestick_by_time(df_raw, start_index, end_index, list_predict):
+    df_candle = df_raw.iloc[start_index:end_index][['timestamp', 'open', 'high', 'low', 'close']]
+    df_candle['timestamp'] = pd.to_datetime(df_candle['timestamp'])
+    df_candle.set_index('timestamp', inplace=True)
+    
+    fig = plt.figure(figsize=(20, 12))
+    gs = GridSpec(1, 2, width_ratios=[10, 1], figure=fig)
+    ax1 = fig.add_subplot(gs[0])
+    ax2 = fig.add_subplot(gs[1])
+    
+    mc= mpf.make_marketcolors(up='green', down='red', edge={'up': 'green', 'down': 'red'}, wick={'up': 'green', 'down': 'red'}, volume={'up': 'green', 'down': 'red'})
+    s = mpf.make_mpf_style(marketcolors=mc)
+    
+    mpf.plot(
+        df_candle, type='candle', style='charles', ax = ax1,
+        volume=False, ylabel='Price'
+    )
     ax1.set_title('Predict Price')
     ax1.set_ylabel('Price')
     list_ema_7 = []
     list_ema_34 = []
     list_ema_89 = []
-    list_upperband = []
-    list_lowerband = []
-    for index, predicted_class, ema_7, ema_34, ema_89, rsi, upperband, lowerband, candlestick_pattern, status_reverse in list_predict:
+    for index, predicted_class, ema_34, ema_89, rsi, candlestick_pattern in list_predict:
         price = df_raw.iloc[index]['close']
         if candlestick_pattern is not None:
             candlestick_pattern_data = eval(candlestick_pattern.replace("null", "2").replace("false", "0").replace("true", "1"))
@@ -60,24 +91,17 @@ def plot_predict(df_raw, start_index, end_index, list_predict):
         else:
             candletype = ""
             
-        list_ema_7.append(ema_7)
         list_ema_34.append(ema_34)
         list_ema_89.append(ema_89)
-        list_upperband.append(upperband)
-        list_lowerband.append(lowerband)
         
         color = 'green' if predicted_class == 1 else 'red'
         if predicted_class in [0, 1]:
             ax1.scatter([index-start_index], [price], color=color, s=100)
-        ax1.text(index-start_index, price, f"{status_reverse}", fontsize=10, color=color)
-            
-    # plot ema_7 and ema_25
-    # ax1.plot(list_ema_7, color='blue', label='ema_7')
-    # ax1.plot(list_ema_25, color='orange', label='ema_25')   
+        # ax1.text(index-start_index, price, f"{rsi}", fontsize=10, color=color)
+               
     ax1.plot(list_ema_34, color='pink', label='ema_34')   
     ax1.plot(list_ema_89, color='yellow', label='ema_89') 
-    # ax1.plot(list_upperband, color='red', label='upperband') 
-    # ax1.plot(list_lowerband, color='green', label='lowerband') 
+    ax1.legend()
     
     time_stamp = df_raw.iloc[start_index]['timestamp'].replace('-', '').replace(':', '').replace(' ', '')
         
@@ -95,7 +119,7 @@ list_label = []
 start_date = None
 current_year = None
 end_date = None 
-csv_path = r"indicator_data_xau_table_m15_2024_7.csv"
+csv_path = r"indicator_data_xau_table_m5_2022.csv"
 df_raw = pd.read_csv(csv_path)
 for index in tqdm.tqdm(range(len(df_raw))):
     label = df_raw.iloc[index]['labels']
@@ -108,21 +132,19 @@ for index in tqdm.tqdm(range(len(df_raw))):
     if start_date is None:
         start_date = current_date
         start_index = index
-    
     ema_89 = df_raw.iloc[index]['ema_89']
     ema_34 = df_raw.iloc[index]['ema_34']
-    ema_7 = df_raw.iloc[index]['ema_7']
-    upperband = df_raw.iloc[index]['upperband']
-    lowerband = df_raw.iloc[index]['lowerband']
-    # candlestick_pattern = df_raw.iloc[index]['candlestick_pattern']
     candlestick_pattern = None
-    status_reverse = df_raw.iloc[index]['status_reverse']
+    index_db = df_raw.index[index]
+    # if label in [0,1]:
+    #     plot_candlestick_predict(df_raw, index_db, label)
     
-    list_label.append((index, label, ema_7, ema_34, ema_89, rsi, upperband, lowerband, candlestick_pattern, status_reverse))
-    if current_date - start_date > 2:
+    feature_plot = (index, label, ema_34, ema_89, rsi, candlestick_pattern)
+    list_label.append(feature_plot)
+    if current_date - start_date > 7:
         end_date = current_date
         end_index = index
-        plot_predict(df_raw, start_index, end_index, list_label)
+        plot_candlestick_by_time(df_raw, start_index, end_index, list_label)
         list_label = []
         start_date = current_date
         start_index = index
