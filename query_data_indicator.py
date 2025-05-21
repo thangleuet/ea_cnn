@@ -19,8 +19,8 @@ DB_USER = "xttrade"
 DB_PASSWORD ="Xttrade1234$"
 DB_NAME = "XTTRADE"
 
-START_TIME_M15 = "2016-01-01 00:00:00"
-END_TIME_M15 = "2020-01-01 00:00:00"
+START_TIME_M15 = "2023-01-01 00:00:00"
+END_TIME_M15 = "2025-01-01 00:00:00"
 
 class EAData:
     def __init__(self, database: str, start_time: str, end_time: str) -> None:
@@ -76,7 +76,7 @@ class EAData:
         k_atr = 1.5
         # save to csv
         for index, row in tqdm.tqdm(df_pd.iterrows()):
-            indicator_data = eval(row["indicator_data"].replace('NaN', '2').replace('Infinity', '0'))
+            indicator_data = eval(row["indicator_data"].replace('NaN', '2').replace('Infinity', '0').replace('false', '0').replace('true', '1'))
             for key, value in indicator_data.items():
                 df_pd.loc[index, key] = value      
             # labeling data
@@ -89,16 +89,27 @@ class EAData:
                 low_values = []
                 high_values_after = []
                 low_values_after = []
-                current_price = df_pd.loc[window_middle, 'close']
-                candle_type = df_pd.loc[window_middle, 'candle_type']
+                close_price = df_pd.loc[window_middle, 'close']
+                open_price = df_pd.loc[window_middle, 'open']
+                diff_ema_5 = df_pd.loc[window_middle, 'diff_ema_5']
+                
+                support1 = df_pd.loc[window_middle, 'support1'] if abs(df_pd.loc[window_middle, 'support1']) < abs(df_pd.loc[window_middle-1, 'support1']) else df_pd.loc[window_middle-1, 'support1']
+                support2 = df_pd.loc[window_middle, 'support2'] if abs(df_pd.loc[window_middle, 'support2']) < abs(df_pd.loc[window_middle-1, 'support2']) else df_pd.loc[window_middle-1, 'support2']
+                resistance1 = df_pd.loc[window_middle, 'resistance1'] if abs(df_pd.loc[window_middle, 'resistance1']) < abs(df_pd.loc[window_middle-1, 'resistance1']) else df_pd.loc[window_middle-1, 'resistance1']
+                resistance2 = df_pd.loc[window_middle, 'resistance2'] if abs(df_pd.loc[window_middle, 'resistance2']) < abs(df_pd.loc[window_middle-1, 'resistance2']) else df_pd.loc[window_middle-1, 'resistance2']
+                supply1 = df_pd.loc[window_middle, 'supply1'] if abs(df_pd.loc[window_middle, 'supply1']) < abs(df_pd.loc[window_middle-1, 'supply1']) else df_pd.loc[window_middle-1, 'supply1']
+                demand1 = df_pd.loc[window_middle, 'demand1'] if abs(df_pd.loc[window_middle, 'demand1']) < abs(df_pd.loc[window_middle-1, 'demand1']) else df_pd.loc[window_middle-1, 'demand1']
                 
                 atr = df_pd.loc[window_middle, 'atr']
-                tp_price = max(0.005*current_price, k_atr * atr)  # Ngưỡng giá động
-                diff_ema_34_89 = df_pd.loc[window_middle, 'diff_ema_34_89']
+                tp_price = 10  # Ngưỡng giá động
+                
+                timestamp = df_pd.loc[window_middle, 'timestamp']
+                if timestamp == '2024-0-21 12:00:00':
+                    print(timestamp)
 
                 # Lấy giá trị cao/thấp từ từng chỉ báo trong cửa sổ
                 for indicator in indicator_window:
-                    indicator = eval(indicator.replace('NaN', '2'))
+                    indicator = eval(indicator.replace('NaN', '2').replace('Infinity', '0').replace('false', '0').replace('true', '1'))
                     high = indicator["high"]
                     low = indicator["low"]
                     high_values.append(high)
@@ -113,7 +124,7 @@ class EAData:
                 if max_index == window_middle:
                     indicator_window_after = df_pd.loc[max_index + 1 : min(window_end+100, len(df_pd))]["indicator_data"]
                     for indicator in indicator_window_after:
-                        indicator = eval(indicator.replace('NaN', '2'))
+                        indicator = eval(indicator.replace('NaN', '2').replace('Infinity', '0').replace('false', '0').replace('true', '1'))
                         high = indicator["high"]
                         low = indicator["low"]
                         high_values_after.append(high)
@@ -125,7 +136,7 @@ class EAData:
                 elif min_index == window_middle:
                     indicator_window_after = df_pd.loc[min_index + 1 : min(window_end+100, len(df_pd))]["indicator_data"]
                     for indicator in indicator_window_after:
-                        indicator = eval(indicator.replace('NaN', '2'))
+                        indicator = eval(indicator.replace('NaN', '2').replace('Infinity', '0').replace('false', '0').replace('true', '1'))
                         high = indicator["high"]
                         low = indicator["low"]
                         high_values_after.append(high)
@@ -144,25 +155,42 @@ class EAData:
                 #         if (df_pd.loc[window_middle + i, 'close'] - current_price)/current_price < 0.0015 and (max_after - df_pd.loc[window_middle + i, 'close']) >= tp_price:
                 #             if diff_ema_34_89 > 0 or (diff_ema_34_89 < 0 and (df_pd.loc[window_middle+i, 'ema_89'] - df_pd.loc[window_middle+i, 'close'])/df_pd.loc[window_middle+i, 'ema_89'] > 0.005):
                 #                 df_pd.loc[window_middle+i, 'labels'] = 1 # BUY
-                            
-                if max_index == window_middle and (current_price - min_after) >= tp_price and abs((df_pd.loc[window_middle, 'close'] - df_pd.loc[window_middle, 'open'])/df_pd.loc[window_middle, 'close']) < 0.003:
-                    # if (df_pd.loc[window_middle, 'close'] - df_pd.loc[window_middle, 'open'])/df_pd.loc[window_middle, 'close'] < 0 or candle_type != 0:
-                    #     df_pd.loc[window_middle, 'labels'] = 0 # SELL
+                
+                if (abs(support1) < 5 and support1 != 0) or (abs(support2) < 5 and support2 != 0) or (abs(supply1) < 5 and supply1 != 0):
+                    touch_support = True 
+                else:
+                    touch_support = False
+                
+                if (abs(resistance1) < 5 and resistance1 != 0) or (abs(resistance2) < 5 and resistance2 != 0) or (abs(demand1) < 5 and demand1 != 0):
+                    touch_resistance = True 
+                else:
+                    touch_resistance = False
+                    
+                if support1 < 0  or support2 < 0:
+                    up_trend = True
+                else:
+                    up_trend = False
+                if resistance1 > 0 or resistance2 > 0:
+                    down_trend = True
+                else:
+                    down_trend = False
+                
+                if max_index == window_middle and (close_price - min_after) >= tp_price and (touch_resistance or down_trend):
+                    if df_pd.loc[window_middle, 'body_size'] < 0 and diff_ema_5 < 0 and df_pd.loc[window_middle-1, 'diff_ema_5'] > 0:
+                        df_pd.loc[window_middle, 'labels'] = 0 # SELL
                     for i in range(1, 4):
-                        if (current_price - df_pd.loc[window_middle+i, 'close'])/current_price < 0.0015 and (df_pd.loc[window_middle+i, 'close'] - min_after) >= tp_price:
-                            if (diff_ema_34_89 > 0 and (df_pd.loc[window_middle+i, 'close'] - df_pd.loc[window_middle+i, 'ema_89'])/df_pd.loc[window_middle+i, 'close'] > 0.005):
-                                df_pd.loc[window_middle+i, 'labels'] = 0 # SELL
-                            elif diff_ema_34_89 < 0:
-                                df_pd.loc[window_middle+i, 'labels'] = 0 # SELL
-                elif min_index == window_middle and (max_after - current_price) >= tp_price and abs((df_pd.loc[window_middle, 'close'] - df_pd.loc[window_middle, 'open'])/df_pd.loc[window_middle, 'close']) < 0.003:
-                    # if (df_pd.loc[window_middle, 'close'] - df_pd.loc[window_middle, 'open'])/df_pd.loc[window_middle, 'close'] > 0 or candle_type != 0:
-                    #     df_pd.loc[window_middle, 'labels'] = 1 # BUY
+                        diff_ema_5_after_second = df_pd.loc[window_middle+i, 'diff_ema_5']
+                        diff_ema_5_after_first = df_pd.loc[window_middle+i-1, 'diff_ema_5']
+                        if df_pd.loc[window_middle+i, 'close'] - min_after >= tp_price and df_pd.loc[window_middle+i, 'body_size'] < 0 and diff_ema_5_after_second < 0 and diff_ema_5_after_first > 0:
+                            df_pd.loc[window_middle+i, 'labels'] = 0 # SELL
+                elif min_index == window_middle and (max_after - close_price) >= tp_price and (touch_support or up_trend):
+                    if df_pd.loc[window_middle, 'body_size'] > 0 and diff_ema_5 > 0 and df_pd.loc[window_middle-1, 'diff_ema_5'] < 0:
+                        df_pd.loc[window_middle, 'labels'] = 1 # BUY
                     for i in range(1, 4):
-                        if (df_pd.loc[window_middle + i, 'close'] - current_price)/current_price < 0.0015 and (max_after - df_pd.loc[window_middle + i, 'close']) >= tp_price:
-                            if (diff_ema_34_89 < 0 and (df_pd.loc[window_middle+i, 'ema_89'] - df_pd.loc[window_middle+i, 'close'])/df_pd.loc[window_middle+i, 'ema_89'] > 0.005):
-                                df_pd.loc[window_middle+i, 'labels'] = 1 # BUY
-                            elif diff_ema_34_89 > 0:
-                                df_pd.loc[window_middle+i, 'labels'] = 1 # BUY
+                        diff_ema_5_after_second = df_pd.loc[window_middle+i, 'diff_ema_5']
+                        diff_ema_5_after_first = df_pd.loc[window_middle+i-1, 'diff_ema_5']
+                        if (max_after - df_pd.loc[window_middle + i, 'close']) >= tp_price and df_pd.loc[window_middle+i, 'body_size'] > 0 and diff_ema_5_after_second > 0 and diff_ema_5_after_first < 0:
+                            df_pd.loc[window_middle+i, 'labels'] = 1 # BUY
                 
                 # count label
                 print(df_pd["labels"].value_counts())    
