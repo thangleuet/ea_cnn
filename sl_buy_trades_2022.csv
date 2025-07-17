@@ -1,0 +1,3 @@
+time,entry_time,type_keylevel,key_level,value,delta_ema_h1
+2022-03-06 23:00:00,2022-03-07 13:00:00,R,1974.369,10,True
+2022-10-21 20:00:00,2022-10-26 08:00:00,R,1671.732,10,False
